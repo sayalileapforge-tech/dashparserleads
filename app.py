@@ -20,6 +20,10 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 
 try:
     import mysql.connector
@@ -489,10 +493,19 @@ def get_leads():
         search = request.args.get('search', None)
         page_size = request.args.get('page_size', 25, type=int)
         
-        print(f"[API] /api/leads - search: {search}, page: {page}")
+        print(f"[API] /api/leads - search: {search}, page: {page}, status: {status}")
         
-        # Use sample data (Meta API can hang or crash)
-        all_leads = [
+        # Fetch leads from Meta API first
+        fetcher = get_fetcher()
+        meta_leads = fetcher.fetch_leads(limit=1000)  # Fetch up to 1000 leads
+        
+        if meta_leads:
+            print(f"[API] Got {len(meta_leads)} leads from Meta API")
+            all_leads = meta_leads
+        else:
+            # Fallback to sample data if Meta API fails or no credentials
+            print(f"[API] Meta API returned no leads - using sample data")
+            all_leads = [
                 {
                     'id': 1,
                     'full_name': 'Anchit Parveen Gupta',
@@ -1233,6 +1246,8 @@ def calculate_g_dates():
         
         print(f"[G/G1/G2 CALCULATOR] Mode: {mode}")
         print(f"[G/G1/G2 CALCULATOR] Success: {response['success']}")
+        print(f"[G/G1/G2 CALCULATOR] Response keys: {list(response.keys())}")
+        print(f"[G/G1/G2 CALCULATOR] Full response: {response}")
         if response.get('calculation_performed'):
             print(f"[G/G1/G2 CALCULATOR] G Date: {response['g_date']}")
             print(f"[G/G1/G2 CALCULATOR] G2 Date: {response['g2_date']}")
@@ -1351,6 +1366,218 @@ def delete_lead(lead_id):
     return jsonify({'success': True}), 200
 
 
+# ============================================================
+# LEAD DATA PERSISTENCE ENDPOINTS - Store to MySQL
+# ============================================================
+
+@app.route('/api/leads/<lead_id>/signal', methods=['PUT'])
+def update_lead_signal(lead_id):
+    """Update lead's meta signal"""
+    try:
+        data = request.get_json()
+        signal_value = data.get('signal')
+        
+        print(f"[DB] Updating lead {lead_id} signal to: {signal_value}", flush=True)
+        
+        # Try to save to MySQL if available
+        conn = None
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                query = """
+                    INSERT INTO meta_leads (meta_lead_id, full_name, signal)
+                    VALUES (%s, 'Unknown', %s)
+                    ON DUPLICATE KEY UPDATE signal = VALUES(signal)
+                """
+                cursor.execute(query, (lead_id, signal_value))
+                conn.commit()
+                cursor.close()
+                print(f"[DB] ✓ Lead {lead_id} signal saved to MySQL", flush=True)
+            else:
+                print(f"[DB] MySQL not available - signal not persisted", flush=True)
+        except Exception as db_error:
+            print(f"[DB] Error saving signal: {db_error}", flush=True)
+        finally:
+            if conn:
+                conn.close()
+        
+        return jsonify({'success': True, 'message': 'Signal updated'}), 200
+    except Exception as e:
+        print(f"[API] Error updating signal: {str(e)}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/leads/<lead_id>/premium', methods=['PUT'])
+def update_lead_premium(lead_id):
+    """Update lead's premium potential"""
+    try:
+        data = request.get_json()
+        premium = data.get('premium')
+        
+        print(f"[DB] Updating lead {lead_id} premium to: {premium}", flush=True)
+        
+        conn = None
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                query = """
+                    INSERT INTO meta_leads (meta_lead_id, full_name, premium)
+                    VALUES (%s, 'Unknown', %s)
+                    ON DUPLICATE KEY UPDATE premium = VALUES(premium)
+                """
+                cursor.execute(query, (lead_id, premium))
+                conn.commit()
+                cursor.close()
+                print(f"[DB] ✓ Lead {lead_id} premium saved to MySQL", flush=True)
+            else:
+                print(f"[DB] MySQL not available - premium not persisted", flush=True)
+        except Exception as db_error:
+            print(f"[DB] Error saving premium: {db_error}", flush=True)
+        finally:
+            if conn:
+                conn.close()
+        
+        return jsonify({'success': True, 'message': 'Premium updated'}), 200
+    except Exception as e:
+        print(f"[API] Error updating premium: {str(e)}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/leads/<lead_id>/potential-status', methods=['PUT'])
+def update_lead_potential_status(lead_id):
+    """Update lead's potential status"""
+    try:
+        data = request.get_json()
+        potential_status = data.get('potential_status')
+        
+        print(f"[DB] Updating lead {lead_id} potential status to: {potential_status}", flush=True)
+        
+        conn = None
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                query = """
+                    INSERT INTO meta_leads (meta_lead_id, full_name, potential_status)
+                    VALUES (%s, 'Unknown', %s)
+                    ON DUPLICATE KEY UPDATE potential_status = VALUES(potential_status)
+                """
+                cursor.execute(query, (lead_id, potential_status))
+                conn.commit()
+                cursor.close()
+                print(f"[DB] ✓ Lead {lead_id} potential status saved to MySQL", flush=True)
+            else:
+                print(f"[DB] MySQL not available - potential status not persisted", flush=True)
+        except Exception as db_error:
+            print(f"[DB] Error saving potential status: {db_error}", flush=True)
+        finally:
+            if conn:
+                conn.close()
+        
+        return jsonify({'success': True, 'message': 'Potential status updated'}), 200
+    except Exception as e:
+        print(f"[API] Error updating potential status: {str(e)}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/leads/<lead_id>/renewal-date', methods=['PUT'])
+def update_lead_renewal_date(lead_id):
+    """Update lead's renewal date"""
+    try:
+        data = request.get_json()
+        renewal_date = data.get('renewal_date')
+        
+        print(f"[DB] Updating lead {lead_id} renewal date to: {renewal_date}", flush=True)
+        
+        conn = None
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                query = """
+                    INSERT INTO meta_leads (meta_lead_id, full_name, renewal_date)
+                    VALUES (%s, 'Unknown', %s)
+                    ON DUPLICATE KEY UPDATE renewal_date = VALUES(renewal_date)
+                """
+                cursor.execute(query, (lead_id, renewal_date))
+                conn.commit()
+                cursor.close()
+                print(f"[DB] ✓ Lead {lead_id} renewal date saved to MySQL", flush=True)
+            else:
+                print(f"[DB] MySQL not available - renewal date not persisted", flush=True)
+        except Exception as db_error:
+            print(f"[DB] Error saving renewal date: {db_error}", flush=True)
+        finally:
+            if conn:
+                conn.close()
+        
+        return jsonify({'success': True, 'message': 'Renewal date updated'}), 200
+    except Exception as e:
+        print(f"[API] Error updating renewal date: {str(e)}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/quotes/save', methods=['POST'])
+def save_quote_data():
+    """Save quote data (DASH, MVR, Property) to MySQL"""
+    try:
+        data = request.get_json()
+        lead_id = data.get('lead_id')
+        quote_type = data.get('quote_type')  # 'auto', 'property', 'combined'
+        
+        print(f"[DB] Saving {quote_type} quote for lead {lead_id}", flush=True)
+        
+        conn = None
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                
+                # Save parsed PDF data if present
+                if data.get('dash_data'):
+                    dash_query = """
+                        INSERT INTO parsed_pdf_data (lead_id, document_type, raw_extracted_data, parsed_at)
+                        VALUES (%s, 'DASH', %s, NOW())
+                    """
+                    cursor.execute(dash_query, (lead_id, json.dumps(data.get('dash_data'))))
+                
+                if data.get('mvr_data'):
+                    mvr_query = """
+                        INSERT INTO parsed_pdf_data (lead_id, document_type, raw_extracted_data, parsed_at)
+                        VALUES (%s, 'MVR', %s, NOW())
+                    """
+                    cursor.execute(mvr_query, (lead_id, json.dumps(data.get('mvr_data'))))
+                
+                # Save property data if present
+                if data.get('property_data'):
+                    prop_query = """
+                        INSERT INTO property_details (lead_id, address, city, postal_code, property_type, 
+                                                     created_at)
+                        VALUES (%s, %s, %s, %s, %s, NOW())
+                    """
+                    prop_data = data.get('property_data')
+                    cursor.execute(prop_query, (lead_id, prop_data.get('address'), prop_data.get('city'), 
+                                              prop_data.get('postal'), prop_data.get('property_type')))
+                
+                conn.commit()
+                cursor.close()
+                print(f"[DB] ✓ Quote data for lead {lead_id} saved to MySQL", flush=True)
+            else:
+                print(f"[DB] MySQL not available - quote not persisted", flush=True)
+        except Exception as db_error:
+            print(f"[DB] Error saving quote: {db_error}", flush=True)
+        finally:
+            if conn:
+                conn.close()
+        
+        return jsonify({'success': True, 'message': 'Quote saved'}), 200
+    except Exception as e:
+        print(f"[API] Error saving quote: {str(e)}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
@@ -1366,7 +1593,7 @@ if __name__ == '__main__':
     import warnings
     warnings.filterwarnings('ignore')
     
-    port = int(os.getenv('FLASK_PORT', 3001))
+    port = int(os.getenv('FLASK_PORT', 3000))
     debug = os.getenv('FLASK_DEBUG', 'False') == 'True'
     
     print(f"[START] Flask server starting on port {port}", flush=True)

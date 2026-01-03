@@ -1622,10 +1622,10 @@
             try {
                 console.log(`[DASH] Parsing DASH PDF for driver ${driverNum}: ${file.name}`);
                 
-                // IMPORTANT: Clear ONLY old DASH data for this driver before parsing new file
-                // Keep MVR data if it exists
+                // IMPORTANT: Clear old data for this driver before parsing new file
                 parsedDASHData[driverNum] = null;
-                console.log(`[DASH] Cleared old DASH data for driver ${driverNum}`);
+                parsedGDates[driverNum] = null;  // Clear cached G dates
+                console.log(`[DASH] Cleared old DASH data and G dates for driver ${driverNum}`);
                 
                 // Send file to backend parser
                 const formData = new FormData();
@@ -1795,10 +1795,10 @@
             try {
                 console.log(`[MVR] Parsing MVR PDF for driver ${driverNum}: ${file.name}`);
                 
-                // IMPORTANT: Clear ONLY old MVR data for this driver before parsing new file
-                // Keep DASH data if it exists
+                // IMPORTANT: Clear old data for this driver before parsing new file
                 parsedMVRData[driverNum] = null;
-                console.log(`[MVR] Cleared old MVR data for driver ${driverNum}`);
+                parsedGDates[driverNum] = null;  // Clear cached G dates
+                console.log(`[MVR] Cleared old MVR data and G dates for driver ${driverNum}`);
                 
                 // Send file to backend MVR parser
                 const formData = new FormData();
@@ -1866,10 +1866,18 @@
                         console.log(`[MVR] Found ${data.convictions.length} convictions`);
                         let convictionsList = '';
                         data.convictions.forEach((conviction, index) => {
-                            convictionsList += `<div class="mb-2 pb-2 border-b border-slate-200 last:border-b-0">`;
-                            convictionsList += `<div class="text-xs font-semibold text-slate-700">${conviction.date || 'Date N/A'}</div>`;
-                            convictionsList += `<div class="text-xs text-slate-600">${conviction.description || 'Description N/A'}</div>`;
-                            convictionsList += `</div>`;
+                            // Handle both string and object formats
+                            if (typeof conviction === 'string') {
+                                convictionsList += `<div class="mb-1 pb-1 border-b border-slate-200 last:border-b-0">`;
+                                convictionsList += `<div class="text-xs text-slate-600">${conviction}</div>`;
+                                convictionsList += `</div>`;
+                            } else {
+                                // Object format with date and description
+                                convictionsList += `<div class="mb-2 pb-2 border-b border-slate-200 last:border-b-0">`;
+                                convictionsList += `<div class="text-xs font-semibold text-slate-700">${conviction.date || 'Date N/A'}</div>`;
+                                convictionsList += `<div class="text-xs text-slate-600">${conviction.description || 'Description N/A'}</div>`;
+                                convictionsList += `</div>`;
+                            }
                         });
                         document.getElementById('mvr-convictions-list').innerHTML = convictionsList;
                     } else if (data.convictions_count === '0') {
@@ -2018,11 +2026,12 @@
                         }
                     } else {
                         // Populate the combination section (1 MAX) with calculated dates
-                        const gDateFormatted = formatISOToDisplay(data.g_date);
-                        const g2DateFormatted = formatISOToDisplay(data.g2_date);
-                        const g1DateFormatted = formatISOToDisplay(data.g1_date);
+                        // API already returns dates in MM/DD/YYYY format, no need to reformat
+                        const gDateFormatted = data.g_date || '';
+                        const g2DateFormatted = data.g2_date || '';
+                        const g1DateFormatted = data.g1_date || '';
                         
-                        console.log(`[COMBINATION] Formatted dates - G: "${gDateFormatted}", G2: "${g2DateFormatted}", G1: "${g1DateFormatted}"`);
+                        console.log(`[COMBINATION] Dates from API - G: "${gDateFormatted}", G2: "${g2DateFormatted}", G1: "${g1DateFormatted}"`);
                         
                         // Store per-driver
                         parsedGDates[driverNum] = {
@@ -2204,6 +2213,17 @@
                 if (dashData.current_operators_count && dashData.current_operators_count !== '-') {
                     document.getElementById('prev-operators-list').textContent = `${dashData.current_operators_count} operators on active policy`;
                 }
+                
+                // === ALSO UPDATE COPY TAB FIELDS FOR THIS DRIVER ===
+                // Add null checks before setting values
+                const copyNameEl = document.getElementById('copy-name');
+                if (copyNameEl) copyNameEl.value = dashData.name || '—';
+                
+                const copyDlnEl = document.getElementById('copy-dln');
+                if (copyDlnEl) copyDlnEl.value = dashData.dln || '—';
+                
+                const copyAddressEl = document.getElementById('copy-address');
+                if (copyAddressEl) copyAddressEl.value = dashData.address || '—';
             }
             
             // If driver has MVR data, display it
@@ -2226,12 +2246,26 @@
                 if (mvrData.convictions && mvrData.convictions.length > 0) {
                     let convictionsList = '';
                     mvrData.convictions.forEach(conviction => {
-                        convictionsList += `<div class="mb-2 pb-2 border-b border-slate-200 last:border-b-0">`;
-                        convictionsList += `<div class="text-xs font-semibold text-slate-700">${conviction.date || 'Date N/A'}</div>`;
-                        convictionsList += `<div class="text-xs text-slate-600">${conviction.description || 'Description N/A'}</div>`;
-                        convictionsList += `</div>`;
+                        // Handle both object and string formats
+                        if (typeof conviction === 'string') {
+                            convictionsList += `<div class="mb-1 pb-1 border-b border-slate-200 last:border-b-0">`;
+                            convictionsList += `<div class="text-xs text-slate-600">${conviction}</div>`;
+                            convictionsList += `</div>`;
+                        } else {
+                            // Object format with date and description
+                            convictionsList += `<div class="mb-2 pb-2 border-b border-slate-200 last:border-b-0">`;
+                            convictionsList += `<div class="text-xs font-semibold text-slate-700">${conviction.date || 'Date N/A'}</div>`;
+                            convictionsList += `<div class="text-xs text-slate-600">${conviction.description || 'Description N/A'}</div>`;
+                            convictionsList += `</div>`;
+                        }
                     });
                     document.getElementById('mvr-convictions-list').innerHTML = convictionsList;
+                } else if (mvrData.convictions_count === '0') {
+                    // No convictions on record
+                    document.getElementById('mvr-convictions-list').textContent = 'No convictions on record';
+                } else {
+                    // Convictions not available
+                    document.getElementById('mvr-convictions-list').textContent = '—';
                 }
             }
             
@@ -2454,10 +2488,10 @@
         
         // Load leads data for search
         console.log('[INIT] Loading leads data...');
-        loadAllLeads();
-        
-        // Check for URL parameters from meta dashboard and auto-populate
-        setTimeout(() => {
+        loadAllLeads().then(() => {
+            console.log('[INIT] Leads loaded, checking for URL parameters...');
+            
+            // Check for URL parameters from meta dashboard and auto-populate
             const urlParams = new URLSearchParams(window.location.search);
             const leadId = urlParams.get('leadId');
             const leadName = urlParams.get('leadName');
@@ -2468,7 +2502,7 @@
                 console.log('[INIT] Auto-populating from meta dashboard:', leadName, leadPhone, leadEmail);
                 selectLead(leadName, leadPhone, leadId, leadEmail);
             }
-        }, 500);
+        });
     </script>
 </body>
 </html>

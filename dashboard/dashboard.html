@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Meta Leads Dashboard</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        slate: {
+                            50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+                            400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
+                            800: '#1e293b', 900: '#0f172a',
+                        }
+                    },
+                    boxShadow: {
+                        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)',
+                        'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { margin: 0; -webkit-tap-highlight-color: transparent; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        select { background-image: none; }
+
+        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .toast-enter { animation: slideDown 0.3s ease-out forwards; }
+
+        @media (max-width: 1024px) {
+            /* Force table to cards on tablets and mobile for better view */
+            .responsive-table thead { display: none; }
+            .responsive-table tbody tr { 
+                display: flex; flex-direction: column; background: white;
+                border: 1px solid #e2e8f0; border-radius: 0.75rem;
+                margin-bottom: 1rem; padding: 1rem;
+                box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            }
+            .responsive-table td { display: block; padding: 0.5rem 0; width: 100%; border: none; }
+            .mobile-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 0.25rem; }
+        }
+        @media (min-width: 1025px) { .mobile-label { display: none; } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-600 antialiased selection:bg-indigo-100 selection:text-indigo-700 pb-20 md:pb-0">
+
+    <div id="toast-container" class="fixed top-4 left-0 right-0 z-[60] flex justify-center pointer-events-none"></div>
+
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-sm shadow-md shadow-indigo-200 flex-shrink-0">
+                    <i class="fa-solid fa-layer-group"></i>
+                </span>
+                <div>
+                    <h1 class="text-sm font-bold text-slate-800 leading-tight">INSURANCE BROKER SOLO</h1>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lead Management System</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold border border-indigo-200">JD</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
+
+        <section class="mb-8">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-slate-400"></i> Performance Snapshot
+                </h2>
+                <div class="hidden md:flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2">View Date:</span>
+                    <input type="date" id="dateFilter" value="2023-10-27" class="h-7 bg-slate-50 border-none text-slate-700 text-xs font-medium rounded focus:ring-0 cursor-pointer">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-card hover:border-indigo-200 transition-all group">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm"><i class="fa-solid fa-users-viewfinder"></i></div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">Today</span>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-800 stat-new-leads">0</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">New Leads</div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-card hover:border-indigo-200 transition-all group">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-sm"><i class="fa-solid fa-headset"></i></div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-800 stat-contacted">0</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Contacted</div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-card hover:border-indigo-200 transition-all group">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-sm"><i class="fa-solid fa-paper-plane"></i></div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-800 stat-quotes">0</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Quotes Sent</div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-card hover:border-indigo-200 transition-all group">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm"><i class="fa-solid fa-trophy"></i></div>
+                    </div>
+                    <div class="text-2xl font-bold text-slate-800 stat-closed">0</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">Closed Won</div>
+                </div>
+                <div class="col-span-2 md:col-span-1 bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-lg shadow-slate-900/20 group relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-3 opacity-10 text-white text-5xl transform translate-x-2 -translate-y-2"><i class="fa-solid fa-dollar-sign"></i></div>
+                    <div class="flex justify-between items-start mb-2 relative z-10">
+                        <div class="w-8 h-8 rounded-lg bg-slate-700 text-emerald-400 flex items-center justify-center text-sm border border-slate-600"><i class="fa-solid fa-sack-dollar"></i></div>
+                    </div>
+                    <div class="text-2xl font-bold text-white relative z-10 stat-revenue">$0</div>
+                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-1 relative z-10">Prem. Sold</div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="flex justify-between items-end mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-brands fa-meta text-blue-600"></i> Meta Leads Snapshot
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">Real-time incoming leads via Meta Ads API</p>
+                </div>
+                <button class="h-9 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-bold transition-all shadow-subtle flex items-center gap-2 refresh-btn">
+                    <i class="fa-solid fa-rotate"></i> Refresh Leads
+                </button>
+            </div>
+
+            <div class="md:bg-white md:border md:border-slate-200 md:rounded-xl md:shadow-card md:overflow-hidden">
+                <table class="w-full text-left border-collapse responsive-table" id="leads-table">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-48">Lead Identity</th>
+                            
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-44">Contact Info</th>
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-36">Status</th>
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider min-w-[180px]">Premium Potential</th>
+                            
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-32">Renewal Date</th>
+                            
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center w-36 bg-indigo-50/50">Meta Signal</th>
+                            <th class="p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right w-32">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="md:divide-y md:divide-slate-50" id="table-body">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="mt-6 mb-4 flex justify-between items-center px-1 py-4 bg-slate-50 rounded-lg" style="display: flex !important; visibility: visible !important;">
+                <span class="text-sm font-medium text-slate-600" id="pagination-info" style="display: block !important;">Showing 0 of 0 Leads</span>
+                <div class="flex items-center gap-3" style="display: flex !important;">
+                    <button id="prev-btn" class="h-10 px-5 bg-indigo-600 text-white rounded-lg text-sm font-bold transition-all shadow-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed" disabled style="display: inline-block !important; cursor: pointer !important;">
+                        ← Previous
+                    </button>
+                    <button id="next-btn" class="h-10 px-5 bg-indigo-600 text-white rounded-lg text-sm font-bold transition-all shadow-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed" style="display: inline-block !important; cursor: pointer !important;">
+                        Next →
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <template id="row-template">
+        <tr class="group hover:bg-indigo-50/30 transition-colors" data-id="">
+            <td class="p-2 md:p-3 align-top md:border-none border-b border-dashed border-slate-100 pb-3">
+                <div class="flex justify-between items-start md:block">
+                    <div>
+                        <div class="text-sm font-bold text-slate-800 lead-name">Name</div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-0.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 w-fit lead-id">ID</div>
+                        
+                        <div class="mt-1.5">
+                            <div class="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">
+                                <i class="fa-regular fa-clock text-[9px]"></i> <span class="text-[10px] font-bold lead-age">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
+
+            <td class="p-2 md:p-3 align-top">
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between group/phone-row pr-2">
+                        <a href="#" class="lead-phone-link flex items-center gap-2 text-xs text-slate-600 hover:text-indigo-600 hover:underline transition-colors group/phone truncate">
+                            <i class="fa-solid fa-phone text-slate-300 w-3 group-hover/phone:text-indigo-500"></i> 
+                            <span class="lead-phone font-medium"></span>
+                        </a>
+                        <button class="w-6 h-6 rounded flex items-center justify-center bg-white border border-slate-200 text-slate-300 hover:text-blue-500 hover:border-blue-200 transition-all shadow-sm flex-shrink-0" title="Save to Google Contacts" onclick="saveToGoogle(this)">
+                            <i class="fa-solid fa-user-plus text-[10px]"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-slate-600 truncate"><i class="fa-solid fa-envelope text-slate-300 w-3"></i> <span class="lead-email"></span></div>
+                </div>
+            </td>
+
+            <td class="p-2 md:p-3 align-top">
+                <span class="mobile-label">Status</span>
+                <div class="relative">
+                    <select class="status-select w-full h-8 pl-2 pr-7 bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 appearance-none cursor-pointer">
+                        <option value="new">New Lead</option>
+                        <option value="contacted">Contacted</option>
+                        <option value="quote_sent">Quote Sent</option>
+                        <option value="closed_won">Closed Won</option>
+                        <option value="closed_lost">Closed Lost</option>
+                        <option value="no_answer">No Response</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400"><i class="fa-solid fa-chevron-down text-[10px]"></i></div>
+                </div>
+            </td>
+
+            <td class="p-2 md:p-3 align-top">
+                <span class="mobile-label">Premium Calculator</span>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <div class="relative"><div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-slate-400"><i class="fa-solid fa-car text-[9px]"></i></div>
+                        <input type="number" placeholder="Auto" class="calc-auto h-7 w-full bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-medium rounded block pl-5 px-1 focus:ring-1 focus:ring-indigo-500" oninput="updateRowTotal(this)">
+                    </div>
+                    <div class="relative"><div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-slate-400"><i class="fa-solid fa-house text-[9px]"></i></div>
+                        <input type="number" placeholder="Home" class="calc-home h-7 w-full bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-medium rounded block pl-5 px-1 focus:ring-1 focus:ring-indigo-500" oninput="updateRowTotal(this)">
+                    </div>
+                    <div class="relative"><div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-slate-400"><i class="fa-solid fa-building text-[9px]"></i></div>
+                        <input type="number" placeholder="Tent" class="calc-tenant h-7 w-full bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-medium rounded block pl-5 px-1 focus:ring-1 focus:ring-indigo-500" oninput="updateRowTotal(this)">
+                    </div>
+                    <div class="relative"><div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-slate-500"><i class="fa-solid fa-calculator text-[9px]"></i></div>
+                        <input type="text" placeholder="Total" readonly class="calc-total h-7 w-full bg-slate-100 border border-slate-200 text-slate-900 text-[10px] font-bold rounded block pl-5 px-1">
+                    </div>
+                </div>
+            </td>
+
+            <td class="p-2 md:p-3 align-top">
+                <span class="mobile-label">Renewal Date</span>
+                <div class="relative">
+                    <input type="date" class="renewal-date h-8 w-full bg-white border border-slate-200 text-slate-700 text-[11px] font-medium rounded-lg px-2 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 cursor-pointer">
+                </div>
+            </td>
+
+            <td class="p-2 md:p-3 align-top bg-indigo-50/20 md:bg-indigo-50/30 border-l border-r border-indigo-100/50">
+                <span class="mobile-label">Meta Signal Control</span>
+                
+                <div class="flex justify-center mb-2">
+                    <div class="inline-flex bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
+                        <button class="signal-toggle-green w-9 py-1 rounded-md text-[9px] font-bold transition-all text-slate-400 hover:text-emerald-600" onclick="setSignal(this, 'green')">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                        <div class="w-px bg-slate-200 my-0.5"></div>
+                        <button class="signal-toggle-red w-9 py-1 rounded-md text-[9px] font-bold transition-all text-slate-400 hover:text-rose-600" onclick="setSignal(this, 'red')">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="sync-btn w-full h-7 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-bold shadow-sm transition-all flex items-center justify-center gap-1" onclick="syncMetaSignal(this)">
+                    <i class="fa-brands fa-meta"></i> Sync
+                </button>
+
+                <div class="sync-timestamp text-[9px] text-slate-400 text-center mt-1.5 font-mono opacity-0 transition-opacity whitespace-nowrap leading-tight">
+                    Pending
+                </div>
+            </td>
+
+            <td class="p-2 md:p-3 align-top md:text-right">
+                <button class="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition-all shadow-md flex items-center gap-2 ml-auto justify-center whitespace-nowrap process-btn">
+                    Process <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </td>
+        </tr>
+    </template>
+
+    <script>
+        // ===========================
+        // API Configuration
+        // ===========================
+        const API_BASE_URL = 'http://localhost:3001';
+        const API_ENDPOINTS = {
+            leads: `${API_BASE_URL}/api/leads`,
+            leadStatus: (id) => `${API_BASE_URL}/api/leads/${id}`,
+            leadSignal: (id) => `${API_BASE_URL}/api/leads/${id}/signal`,
+            processLead: (id) => `${API_BASE_URL}/api/process/${id}`,
+            sendToEventManager: (id) => `${API_BASE_URL}/api/events/send-lead/${id}`,
+        };
+
+        // State management
+        let leadsData = [];
+        let totalLeads = 0;
+        let currentPage = 1;
+        let selectedDate = null;
+        const pageSize = 25;
+
+        // ===========================
+        // API Functions
+        // ===========================
+
+        /**
+         * Fetch leads from backend API
+         */
+        async function fetchLeads(page = 1, status = null, search = null) {
+            try {
+                let url = `${API_ENDPOINTS.leads}?page=${page}&page_size=${pageSize}`;
+                if (status) url += `&status=${status}`;
+                if (search) url += `&search=${search}`;
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                leadsData = data.leads;
+                totalLeads = data.total;
+                currentPage = page;
+                renderLeadsTable(data);
+                updateStatistics(data);
+                updatePaginationButtons();
+                return data;
+            } catch (error) {
+                console.error('Error fetching leads:', error);
+                showError('Failed to fetch leads. Make sure backend is running on http://localhost:3001');
+            }
+        }
+
+        /**
+         * Update lead status
+         */
+        async function updateLeadStatus(leadId, newStatus) {
+            try {
+                const response = await fetch(API_ENDPOINTS.leadStatus(leadId), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus }),
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const updated = await response.json();
+                console.log('Status updated:', updated);
+                
+                // Refresh leads table
+                await fetchLeads(currentPage);
+                return updated;
+            } catch (error) {
+                console.error('Error updating status:', error);
+                showError('Failed to update lead status');
+            }
+        }
+
+        /**
+         * Process lead - Navigate to PDF parser
+         */
+        function processLead(leadId, leadName, leadPhone, leadEmail) {
+            // Navigate to PDF parser dashboard with lead data
+            const params = new URLSearchParams({
+                leadId: leadId,
+                leadName: leadName,
+                leadPhone: leadPhone,
+                leadEmail: leadEmail
+            });
+            window.location.href = `/pdf-parser?${params.toString()}`;
+        }
+
+        /**
+         * Calculate total pages
+         */
+        function getTotalPages() {
+            return Math.ceil(totalLeads / pageSize);
+        }
+
+        /**
+         * Update pagination buttons state
+         */
+        function updatePaginationButtons() {
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const totalPages = getTotalPages();
+
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage >= totalPages;
+
+            const paginationInfo = document.getElementById('pagination-info');
+            if (paginationInfo) {
+                paginationInfo.textContent = `Page ${currentPage} of ${totalPages} (${leadsData.length} leads showing)`;
+            }
+        }
+
+        /**
+         * Navigate to next page
+         */
+        function nextPage() {
+            const totalPages = getTotalPages();
+            if (currentPage < totalPages) {
+                currentPage++;
+                fetchLeads(currentPage);
+            }
+        }
+
+        /**
+         * Navigate to previous page
+         */
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                fetchLeads(currentPage);
+            }
+        }
+
+        // ===========================
+        // UI Functions
+        // ===========================
+
+        /**
+         * Render leads table dynamically
+         */
+        function renderLeadsTable(data) {
+            const tbody = document.getElementById('table-body');
+            
+            if (!data.leads || data.leads.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">No leads found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            data.leads.forEach(lead => {
+                const template = document.getElementById('row-template');
+                const clone = template.content.cloneNode(true);
+                const row = clone.querySelector('tr');
+
+                row.dataset.id = lead.id;
+                row.querySelector('.lead-name').textContent = lead.full_name || `${lead.first_name} ${lead.last_name}` || 'Unknown';
+                row.querySelector('.lead-id').textContent = `ID: #${lead.id}`;
+                
+                const leadAge = getLeadAge(lead.created_at);
+                row.querySelector('.lead-age').textContent = formatLeadAge(leadAge);
+                
+                // Phone Link - show placeholder if empty
+                const displayPhone = lead.phone && lead.phone.trim() ? lead.phone : '—';
+                row.querySelector('.lead-phone').textContent = displayPhone;
+                if (lead.phone && lead.phone.trim()) {
+                    const cleanPhone = lead.phone.replace(/\D/g, ''); 
+                    row.querySelector('.lead-phone-link').href = `tel:${cleanPhone}`;
+                }
+                
+                // Email - show placeholder if empty
+                const displayEmail = lead.email && lead.email.trim() ? lead.email : '—';
+                row.querySelector('.lead-email').textContent = displayEmail;
+
+                // Status select
+                const statusSelect = row.querySelector('.status-select');
+                statusSelect.value = lead.status || 'new';
+                statusSelect.dataset.leadId = lead.id;
+
+                // Premium values
+                row.querySelector('.calc-auto').value = lead.auto_premium || '';
+                row.querySelector('.calc-home').value = lead.home_premium || '';
+                row.querySelector('.calc-tenant').value = lead.tenant_premium || '';
+                updateRowTotalFromRow(row);
+
+                // Renewal date
+                row.querySelector('.renewal-date').value = lead.renewal_date || '';
+
+                // Process button
+                row.querySelector('.process-btn').dataset.leadId = lead.id;
+
+                // Signal - Load from database
+                const dbSignal = lead.signal || 'red';
+                setSignal(row.querySelector('.signal-toggle-green'), dbSignal);
+
+                tbody.appendChild(clone);
+            });
+
+            attachEventListeners();
+        }
+
+        /**
+         * Update statistics cards
+         */
+        function updateStatistics(data) {
+            const leads = data.leads || [];
+            
+            const newCount = leads.filter(l => l.status === 'new').length;
+            const contactedCount = leads.filter(l => l.status === 'contacted').length;
+            const quoteCount = leads.filter(l => l.status === 'quote_sent').length;
+            const closedCount = leads.filter(l => l.status === 'closed_won').length;
+            const totalRevenue = leads.reduce((sum, l) => sum + (l.auto_premium || 0) + (l.home_premium || 0) + (l.tenant_premium || 0), 0);
+
+            document.querySelector('.stat-new-leads').textContent = newCount;
+            document.querySelector('.stat-contacted').textContent = contactedCount;
+            document.querySelector('.stat-quotes').textContent = quoteCount;
+            document.querySelector('.stat-closed').textContent = closedCount;
+            document.querySelector('.stat-revenue').textContent = `$${totalRevenue}`;
+        }
+
+        /**
+         * Attach event listeners to dynamic elements
+         */
+        function attachEventListeners() {
+            // Status change listener
+            document.querySelectorAll('.status-select').forEach(select => {
+                select.removeEventListener('change', handleStatusChange);
+                select.addEventListener('change', handleStatusChange);
+            });
+
+            // Process button listener
+            document.querySelectorAll('.process-btn').forEach(btn => {
+                btn.removeEventListener('click', handleProcessClick);
+                btn.addEventListener('click', handleProcessClick);
+            });
+
+            // Premium input listener
+            document.querySelectorAll('.calc-auto, .calc-home, .calc-tenant').forEach(input => {
+                input.removeEventListener('input', handlePremiumInput);
+                input.addEventListener('input', handlePremiumInput);
+            });
+        }
+
+        async function handleStatusChange(e) {
+            const leadId = parseInt(e.target.dataset.leadId);
+            const newStatus = e.target.value;
+            await updateLeadStatus(leadId, newStatus);
+        }
+
+        async function handleProcessClick(e) {
+            e.preventDefault();
+            const leadId = parseInt(e.currentTarget.dataset.leadId);
+            const row = e.currentTarget.closest('tr');
+            const leadName = row.querySelector('.lead-name').textContent;
+            const leadPhone = row.querySelector('.lead-phone').textContent;
+            const leadEmail = row.querySelector('.lead-email').textContent;
+            await processLead(leadId, leadName, leadPhone, leadEmail);
+        }
+
+        function handlePremiumInput(e) {
+            const row = e.target.closest('tr');
+            updateRowTotalFromRow(row);
+        }
+
+        /**
+         * Update total for a single row
+         */
+        function updateRowTotalFromRow(row) {
+            const auto = parseFloat(row.querySelector('.calc-auto').value) || 0;
+            const home = parseFloat(row.querySelector('.calc-home').value) || 0;
+            const tenant = parseFloat(row.querySelector('.calc-tenant').value) || 0;
+            const totalInput = row.querySelector('.calc-total');
+            
+            const sum = auto + home + tenant;
+            totalInput.value = sum > 0 ? sum : '';
+        }
+
+        function updateRowTotal(input) {
+            updateRowTotalFromRow(input.closest('tr'));
+        }
+
+        /**
+         * Helper: Format lead age
+         */
+        function getLeadAge(createdAt) {
+            if (!createdAt) return 0;
+            const created = new Date(createdAt);
+            const now = new Date();
+            return Math.floor((now - created) / (1000 * 60)); // minutes
+        }
+
+        function formatLeadAge(minutes) {
+            if (minutes < 60) return `${minutes}m`;
+            if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+            return `${Math.floor(minutes / 1440)}d`;
+        }
+
+        // --- GOOGLE SAVE ---
+        window.saveToGoogle = function(btn) {
+            const row = btn.closest('tr');
+            const name = row.querySelector('.lead-name').textContent;
+            
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-[10px] text-blue-500"></i>';
+            btn.classList.add('bg-blue-50', 'border-blue-200');
+            
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fa-solid fa-check text-[10px] text-emerald-500"></i>';
+                btn.classList.remove('bg-blue-50', 'border-blue-200');
+                btn.classList.add('bg-emerald-50', 'border-emerald-200');
+                showToast(`Saved ${name} to Google Contacts`, 'success');
+            }, 1000);
+        };
+
+        // --- META SIGNAL LOGIC ---
+        window.setSignal = function(btn, type) {
+            const row = btn.closest('tr');
+            const leadId = parseInt(row.dataset.id);
+            const greenBtn = row.querySelector('.signal-toggle-green');
+            const redBtn = row.querySelector('.signal-toggle-red');
+            const syncBtn = row.querySelector('.sync-btn');
+            
+            if (type === 'green') {
+                greenBtn.className = "signal-toggle-green w-9 py-1 rounded-md text-[9px] font-bold transition-all bg-emerald-100 text-emerald-700 shadow-inner";
+                redBtn.className = "signal-toggle-red w-9 py-1 rounded-md text-[9px] font-bold transition-all text-slate-300 hover:text-rose-600";
+                row.dataset.signal = 'green';
+                
+                syncBtn.disabled = false;
+                syncBtn.className = "sync-btn w-full h-7 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-bold shadow-sm transition-all flex items-center justify-center gap-1";
+                syncBtn.innerHTML = '<i class="fa-brands fa-meta"></i> Sync';
+                
+                // Save to database
+                updateSignalInDatabase(leadId, 'green');
+                
+            } else {
+                greenBtn.className = "signal-toggle-green w-9 py-1 rounded-md text-[9px] font-bold transition-all text-slate-300 hover:text-emerald-600";
+                redBtn.className = "signal-toggle-red w-9 py-1 rounded-md text-[9px] font-bold transition-all bg-rose-100 text-rose-700 shadow-inner";
+                row.dataset.signal = 'red';
+                
+                syncBtn.disabled = true;
+                syncBtn.className = "sync-btn w-full h-7 bg-slate-100 text-slate-400 border border-slate-200 rounded text-[9px] font-bold flex items-center justify-center gap-1 cursor-not-allowed";
+                syncBtn.innerHTML = 'No Sync';
+                
+                // Save to database
+                updateSignalInDatabase(leadId, 'red');
+            }
+        };
+
+        /**
+         * Update signal in database
+         */
+        async function updateSignalInDatabase(leadId, signal) {
+            try {
+                const response = await fetch(API_ENDPOINTS.leadSignal(leadId), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ signal: signal }),
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to save signal to database');
+                } else {
+                    console.log(`Signal updated to ${signal} for lead ${leadId}`);
+                }
+            } catch (error) {
+                console.error('Error saving signal:', error);
+            }
+        };
+
+        window.syncMetaSignal = function(btn) {
+            const row = btn.closest('tr');
+            const timestampEl = row.querySelector('.sync-timestamp');
+            const name = row.querySelector('.lead-name').textContent;
+            const leadId = parseInt(row.dataset.id);
+            const signal = row.dataset.signal;
+
+            // Check if signal is green
+            if (signal !== 'green') {
+                showError('Cannot sync: Signal must be green. Red signal indicates lead is not qualified.');
+                return;
+            }
+
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            btn.disabled = true;
+
+            // Send lead to Event Manager API
+            sendLeadToEventManager(leadId, name, timestampEl, btn);
+        };
+
+        /**
+         * Send lead data to Event Manager API
+         */
+        async function sendLeadToEventManager(leadId, name, timestampEl, btn) {
+            try {
+                const response = await fetch(API_ENDPOINTS.sendToEventManager(leadId), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                console.log('Lead sent to Event Manager:', result);
+
+                // Update UI on success
+                btn.className = "sync-btn w-full h-7 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded text-[9px] font-bold flex items-center justify-center gap-1 cursor-default";
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Sent';
+                
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                const fullStamp = `${dateStr}, ${timeStr}`;
+                
+                timestampEl.textContent = `Sent: ${fullStamp}`;
+                timestampEl.style.opacity = '1';
+
+                showToast(`✅ Lead sent to Event Manager: ${name}`, 'success');
+            } catch (error) {
+                console.error('Error sending lead to Event Manager:', error);
+                btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Error';
+                btn.className = "sync-btn w-full h-7 bg-rose-50 text-rose-600 border border-rose-200 rounded text-[9px] font-bold flex items-center justify-center gap-1";
+                btn.disabled = false;
+                showError(`Failed to send lead to Event Manager: ${error.message}`);
+            }
+        };
+
+        function showToast(msg, type) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = "bg-slate-800 text-white px-4 py-3 rounded-lg shadow-2xl text-xs font-bold flex items-center gap-3 toast-enter pointer-events-auto border border-slate-700";
+            const isGoogle = msg.includes('Google');
+            const icon = isGoogle ? 'fa-brands fa-google' : 'fa-brands fa-meta';
+            const color = isGoogle ? 'text-blue-400' : 'text-blue-400';
+            
+            el.innerHTML = `<i class="${icon} ${color}"></i> ${msg}`;
+            container.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+        }
+
+        function showError(message) {
+            console.error(message);
+            alert(message);
+        }
+
+        // ===========================
+        // Initialization
+        // ===========================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load leads on page load
+            fetchLeads(currentPage);
+
+            // Add pagination button listeners
+            document.getElementById('prev-btn').addEventListener('click', previousPage);
+            document.getElementById('next-btn').addEventListener('click', nextPage);
+
+            // Refresh button
+            const refreshBtn = document.querySelector('.refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => {
+                    console.log('Refresh button clicked');
+                    currentPage = 1;
+                    fetchLeads(1);
+                });
+            }
+
+            // Date filter
+            const dateFilter = document.getElementById('dateFilter');
+            if (dateFilter) {
+                dateFilter.addEventListener('change', () => {
+                    currentPage = 1;
+                    fetchLeads(1);
+                });
+            }
+
+            // Process button - navigate to PDF Parse Dashboard
+            const processButtons = document.querySelectorAll('.process-btn');
+            processButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    window.location.href = '../pdf-parser';
+                });
+            });
+
+            // Auto-refresh leads every 10 seconds
+            console.log('Starting auto-refresh interval (10 seconds)');
+            setInterval(() => {
+                console.log('Auto-refreshing leads...');
+                fetchLeads(currentPage);
+            }, 10000);
+        });
+    </script>
+</body>
+</html>

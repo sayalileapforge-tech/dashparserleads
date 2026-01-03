@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Search Functionality Test</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+        input { padding: 8px; width: 300px; font-size: 14px; }
+        button { padding: 8px 16px; cursor: pointer; font-size: 14px; }
+        #output { margin-top: 20px; padding: 10px; border: 1px solid #ddd; min-height: 100px; }
+    </style>
+</head>
+<body>
+    <h1>Search Functionality Test</h1>
+    
+    <div class="test">
+        <h3>Test 1: Function Availability</h3>
+        <div id="test1" class="test"></div>
+    </div>
+    
+    <div class="test">
+        <h3>Test 2: Live Search (Type 'anchit')</h3>
+        <input type="text" id="search-input" placeholder="Type to search...">
+        <button onclick="testSearch()">Test Search Button</button>
+        <div id="suggestions" style="border: 1px solid #ddd; margin-top: 10px; min-height: 50px; padding: 10px; display: none;">
+            <p><strong>Suggestions:</strong></p>
+            <div id="suggestions-list"></div>
+        </div>
+    </div>
+    
+    <div id="output"></div>
+
+    <script>
+        // Test 1: Check if functions are available
+        const test1 = document.getElementById('test1');
+        const functions = ['showSuggestions', 'performSearch', 'selectCustomer', 'clearCustomer'];
+        let allFunctionsExist = true;
+        
+        let html = '<ul>';
+        functions.forEach(fn => {
+            const exists = typeof window[fn] === 'function';
+            allFunctionsExist = allFunctionsExist && exists;
+            html += `<li>${fn}: <strong>${exists ? '✓ EXISTS' : '✗ MISSING'}</strong></li>`;
+        });
+        html += '</ul>';
+        
+        test1.innerHTML = html;
+        test1.className = allFunctionsExist ? 'pass' : 'fail';
+        
+        // Test 2: Live search simulation
+        document.getElementById('search-input').addEventListener('input', function(e) {
+            const query = this.value.trim();
+            if (!query) {
+                document.getElementById('suggestions').style.display = 'none';
+                return;
+            }
+            
+            // Call the actual showSuggestions from the PDF parser page
+            if (typeof window.showSuggestions === 'function') {
+                window.showSuggestions();
+            }
+        });
+        
+        function testSearch() {
+            const query = document.getElementById('search-input').value;
+            if (!query) {
+                alert('Please enter a search query');
+                return;
+            }
+            
+            if (typeof window.performSearch === 'function') {
+                window.performSearch();
+            } else {
+                alert('ERROR: performSearch not available');
+            }
+        }
+        
+        // Log results
+        const output = document.getElementById('output');
+        output.innerHTML = '<p><strong>✓ Test page loaded successfully</strong></p>';
+        if (allFunctionsExist) {
+            output.innerHTML += '<p style="color: green;"><strong>✓ All search functions are available!</strong></p>';
+        } else {
+            output.innerHTML += '<p style="color: red;"><strong>✗ Some functions are missing</strong></p>';
+        }
+    </script>
+</body>
+</html>

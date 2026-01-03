@@ -30,12 +30,20 @@ CREATE TABLE IF NOT EXISTS meta_leads (
     source VARCHAR(100) DEFAULT 'Meta Lead Ads',
     notes TEXT,
     
+    -- Dashboard Lead Tracking Fields
+    signal VARCHAR(100),
+    premium VARCHAR(100),
+    potential_status VARCHAR(100),
+    renewal_date DATE,
+    
     INDEX idx_email (email),
     INDEX idx_phone (phone),
     INDEX idx_status (status),
-    INDEX idx_created_at (created_at)
+    INDEX idx_created_at (created_at),
+    INDEX idx_signal (signal),
+    INDEX idx_potential_status (potential_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci 
-COMMENT='Master Meta Leads table - stores all real leads from Facebook';
+COMMENT='Master Meta Leads table - stores all real leads from Facebook with tracking fields';
 
 -- =====================================================
 -- 2. PARSED PDF DATA TABLE (MVR + DASH Extraction Results)
