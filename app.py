@@ -68,18 +68,27 @@ def get_db_connection():
         print(f"Database connection error: {e}")
         return None
 
-# Store connection in app config
+# Store connection in app config (optional - not required to start)
 try:
-    app.config['db_connection'] = get_db_connection()
-    print("[DB] Database connection established")
+    db_conn = get_db_connection()
+    if db_conn:
+        app.config['db_connection'] = db_conn
+        print("[DB] Database connection established")
+    else:
+        print("[DB] Database not available - running in temporary mode")
+        app.config['db_connection'] = None
 except Exception as e:
-    print(f"[DB] Warning: Database not available - {e}")
+    print(f"[DB] Database optional - running without database")
+    print(f"[DB] Error details: {e}")
     app.config['db_connection'] = None
 
-# Register quote save endpoint
+# Register quote save endpoint (optional)
 try:
-    save_quote(app)
-    print("[API] Quote save endpoint registered")
+    if app.config['db_connection']:
+        save_quote(app)
+        print("[API] Quote save endpoint registered")
+    else:
+        print("[API] Database not connected - quote saving disabled")
 except Exception as e:
     print(f"[API] Warning: Could not register quote endpoint - {e}")
 
@@ -1229,6 +1238,82 @@ def test_database():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================
+# FACEBOOK META WEBHOOK - Auto-sync leads
+# ============================================
+
+# Store leads in memory (temporary storage)
+incoming_leads = []
+
+@app.route('/api/meta-webhook', methods=['GET', 'POST'])
+def meta_webhook():
+    """Facebook Meta webhook for automatic lead sync"""
+    
+    if request.method == 'GET':
+        # Webhook verification
+        verify_token = os.getenv('META_WEBHOOK_VERIFY_TOKEN', 'insurance_dashboard_webhook')
+        token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+        
+        if token == verify_token:
+            print("[META WEBHOOK] Webhook verified successfully")
+            return challenge
+        else:
+            print("[META WEBHOOK] Webhook verification failed")
+            return 'Forbidden', 403
+    
+    if request.method == 'POST':
+        # Receive leads from Facebook
+        try:
+            data = request.get_json()
+            print(f"[META WEBHOOK] Received data: {data}")
+            
+            # Extract leads from Meta webhook payload
+            if data.get('entry'):
+                for entry in data['entry']:
+                    if entry.get('changes'):
+                        for change in entry['changes']:
+                            if change.get('value') and change['value'].get('leadgen_id'):
+                                lead_data = change['value']
+                                
+                                # Store lead in memory
+                                incoming_leads.append({
+                                    'id': lead_data.get('leadgen_id'),
+                                    'form_id': lead_data.get('form_id'),
+                                    'ad_id': lead_data.get('ad_id'),
+                                    'created_time': lead_data.get('created_time'),
+                                    'field_data': lead_data.get('field_data', []),
+                                    'timestamp': datetime.now().isoformat()
+                                })
+                                
+                                print(f"[META WEBHOOK] Lead received: {lead_data.get('leadgen_id')}")
+            
+            # Always return 200 OK to Meta
+            return jsonify({'success': True}), 200
+            
+        except Exception as e:
+            print(f"[META WEBHOOK] Error: {e}")
+            return jsonify({'error': str(e)}), 200  # Return 200 anyway so Meta doesn't retry
+
+
+@app.route('/api/incoming-leads', methods=['GET'])
+def get_incoming_leads():
+    """Get all leads received from Meta webhook"""
+    return jsonify({
+        'success': True,
+        'leads': incoming_leads,
+        'total': len(incoming_leads)
+    }), 200
+
+
+@app.route('/api/incoming-leads/<lead_id>', methods=['DELETE'])
+def delete_lead(lead_id):
+    """Remove a lead from incoming leads"""
+    global incoming_leads
+    incoming_leads = [l for l in incoming_leads if l.get('id') != lead_id]
+    return jsonify({'success': True}), 200
 
 
 # Error handlers
