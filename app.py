@@ -34,7 +34,12 @@ from license_history_integration import (  # G/G1/G2 date calculation
     process_manual_entry,
     process_pdf_data
 )
-from save_quote_endpoint import save_quote  # Quote persistence endpoint
+
+# Quote persistence endpoint (optional - may use mysql)
+try:
+    from save_quote_endpoint import save_quote
+except:
+    save_quote = None  # Optional if mysql not available
 
 # Fix encoding for Windows console
 if sys.platform == 'win32':
