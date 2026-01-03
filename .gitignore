@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Uploads & PDFs
+uploads/
+*.pdf
+
+# Logs
+*.log
+server_log.txt
+server_output.txt
+app_error.log
+debug_output.txt
+test_output.txt
+test_output.log
+flask_server.log
+server_debug.log
+
+# Test & Debug files
+test_*.py
+debug_*.py
+check_*.py
+analyze_*.py
+extract_*.py
+calculate_*.py
+search_for_date.py
+verify_setup.py
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation & Notes
+BEFORE_AFTER_EXPLANATION.md
+CODE_CHANGES_DETAILED.md
+COMBINATION_FIX_SUMMARY.md
+COMPLETE_SOLUTION.md
+DASH_IMPLEMENTATION_COMPLETE.txt
+DASH_PARSER_FIX.md
+DEPLOYMENT_CHECKLIST.md
+DOCUMENTATION_INDEX.md
+DOMAIN_ISOLATION_FIXED.md
+DOMAIN_ISOLATION_IMPLEMENTATION.md
+FINAL_IMPLEMENTATION_SUMMARY.md
+FINAL_STATUS_REPORT.md
+G_G1_G2_COMPLETE_CHECKLIST.md
+G_G1_G2_IMPLEMENTATION.md
+G_G1_G2_QUICK_REFERENCE.md
+IMPLEMENTATION_SUMMARY.md
+MATH_VERIFICATION.md
+MULTI_DRIVER_FEATURE.md
+MULTI_DRIVER_READY.md
+MVR_IMPLEMENTATION_COMPLETE.md
+PDF_PARSING_FIX_COMPLETE.md
+QUICK_REFERENCE.md
+QUICK_START_MULTI_DRIVER.md
+VERIFICATION_CHECKLIST.md
+VISUAL_ARCHITECTURE.md
+DASH_PARSER_QUICK_REFERENCE.md
+DASH_PARSER_READY.md
+
+# Temp files
+function_test.html
+pdf .html
+test_search.html
+Untitled-2.html
+*.txt
+pdf_full_text.txt
+
+# Old/Backup
+dashboard/
