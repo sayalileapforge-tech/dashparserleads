@@ -47,13 +47,21 @@ CORS(app)
 
 # Database connection
 def get_db_connection():
-    """Get MySQL database connection"""
+    """Get MySQL database connection with environment variables"""
     try:
+        # Get from environment variables (for Render/production) or use defaults (for local)
+        host = os.getenv('MYSQL_HOST', 'localhost')
+        port = int(os.getenv('MYSQL_PORT', 3306))
+        user = os.getenv('MYSQL_USER', 'root')
+        password = os.getenv('MYSQL_PASSWORD', 'root@123')
+        database = os.getenv('MYSQL_DATABASE', 'insurance_leads')
+        
         conn = mysql.connector.connect(
-            host='localhost',
-            user='root',
-            password='root@123',
-            database='insurance_leads'
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database
         )
         return conn
     except Error as e:
