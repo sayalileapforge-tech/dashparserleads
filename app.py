@@ -25,7 +25,7 @@ try:
     import mysql.connector
     from mysql.connector import Error
 except:
-    pass  # Database optional
+    Error = Exception  # Fallback if mysql not available
 
 from meta_leads_fetcher import get_fetcher  # Meta API integration
 from dash_parser import parse_dash_report  # DASH PDF parser
@@ -461,7 +461,7 @@ def index():
 def pdf_parser():
     """Serve the PDF Parser UI (DASH & MVR parsing)."""
     try:
-        with open('Untitled-2.html', 'r', encoding='utf-8') as f:
+        with open('pdf-parser.html', 'r', encoding='utf-8') as f:
             content = f.read()
         return Response(content, mimetype='text/html')
     except Exception as e:

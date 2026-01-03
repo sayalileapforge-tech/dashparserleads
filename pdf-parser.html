@@ -983,7 +983,7 @@
         // Fetch all leads on page load
         async function loadAllLeads() {
             try {
-                const response = await fetch('https://dashparserleads.onrender.com/api/leads?page_size=1000');
+                const response = await fetch('/api/leads?page_size=1000');
                 const data = await response.json();
                 if (data.success && data.leads) {
                     allLeads = data.leads;
@@ -1435,7 +1435,7 @@
                 driver_name: document.getElementById('driver-name')?.value || null
             };
             
-            fetch('https://dashparserleads.onrender.com/api/calculate-g-dates', {
+            fetch('/api/calculate-g-dates', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1631,7 +1631,7 @@
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                const response = await fetch('https://dashparserleads.onrender.com/api/parse-dash', {
+                const response = await fetch('/api/parse-dash', {
                     method: 'POST',
                     body: formData
                 });
@@ -1804,7 +1804,7 @@
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                const response = await fetch('https://dashparserleads.onrender.com/api/parse-mvr', {
+                const response = await fetch('/api/parse-mvr', {
                     method: 'POST',
                     body: formData
                 });
