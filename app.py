@@ -420,12 +420,40 @@ def map_extracted_to_ui_fields(parsed_data: dict) -> dict:
 def index():
     """Serve the Meta Leads Dashboard as default entry point."""
     try:
-        with open('dashboard/dashboard.html', 'r', encoding='utf-8') as f:
-            content = f.read()
-        return Response(content, mimetype='text/html')
+        # Try multiple paths for deployed and local environments
+        possible_paths = [
+            'dashboard/dashboard.html',
+            '/opt/render/project/src/dashboard/dashboard.html',
+            './dashboard/dashboard.html',
+            os.path.join(os.path.dirname(__file__), 'dashboard', 'dashboard.html')
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                return Response(content, mimetype='text/html')
+        
+        # If no file found, return API status
+        return jsonify({
+            'status': 'Insurance Dashboard API Running',
+            'version': '1.0',
+            'endpoints': {
+                'health': '/api/health',
+                'parse_dash': '/api/parse-dash',
+                'parse_mvr': '/api/parse-mvr',
+                'g_dates': '/api/calculate-g-dates',
+                'incoming_leads': '/api/incoming-leads',
+                'webhook': '/api/meta-webhook'
+            }
+        }), 200
     except Exception as e:
         print(f"[ERROR] Failed to serve Meta Dashboard: {e}")
-        return jsonify({'error': 'Dashboard not found'}), 404
+        return jsonify({
+            'status': 'Insurance Dashboard API Running',
+            'error': f'Dashboard HTML not found: {e}',
+            'version': '1.0'
+        }), 200
 
 @app.route('/pdf-parser', methods=['GET'])
 def pdf_parser():
