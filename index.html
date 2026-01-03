@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Dashboard - API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .status {
+            text-align: center;
+            color: #27ae60;
+            font-size: 18px;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #d5f4e6;
+            border-radius: 5px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            color: #667eea;
+            font-size: 20px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .endpoint {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .endpoint .method {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            width: 60px;
+            text-align: center;
+            margin-right: 10px;
+        }
+        .endpoint .path {
+            color: #333;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        .endpoint .desc {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .feature {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .feature h3 {
+            margin-bottom: 8px;
+        }
+        .feature p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #764ba2;
+        }
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Insurance Dashboard</h1>
+        <div class="status">
+            ✅ API Server Running Successfully
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <h3>📄 PDF Parsing</h3>
+                <p>DASH & MVR insurance documents</p>
+            </div>
+            <div class="feature">
+                <h3>📅 Date Calculation</h3>
+                <p>G, G1, G2 license dates</p>
+            </div>
+            <div class="feature">
+                <h3>👥 Multi-Driver</h3>
+                <p>Support multiple drivers</p>
+            </div>
+            <div class="feature">
+                <h3>📱 Facebook Leads</h3>
+                <p>Automatic lead sync</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📍 API Endpoints</h2>
+            
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/health</span>
+                <div class="desc">Check API health status</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/parse-dash</span>
+                <div class="desc">Parse DASH insurance document (PDF)</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/parse-mvr</span>
+                <div class="desc">Parse MVR motor vehicle record (PDF)</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/calculate-g-dates</span>
+                <div class="desc">Calculate G, G1, G2 license dates</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method">GET/POST</span>
+                <span class="path">/api/meta-webhook</span>
+                <div class="desc">Facebook Lead Form webhook receiver</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/incoming-leads</span>
+                <div class="desc">Retrieve all received Facebook leads</div>
+            </div>
+
+            <div class="endpoint">
+                <span class="method">DELETE</span>
+                <span class="path">/api/incoming-leads/&lt;lead_id&gt;</span>
+                <div class="desc">Remove a specific lead</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Quick Test</h2>
+            <div class="button-group">
+                <button onclick="testHealth()">Test Health</button>
+                <button onclick="getLeads()">Get Incoming Leads</button>
+                <button onclick="viewAPI()">View Full API Response</button>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <strong>📌 Info:</strong> This is a temporary deployment for client demo. Full deployment with database will be on Hostinger. Facebook leads will automatically sync via webhook.
+        </div>
+
+        <div class="section">
+            <h2>🔧 Environment</h2>
+            <div class="endpoint">
+                <div class="desc">
+                    <strong>Status:</strong> ✅ Running<br>
+                    <strong>Mode:</strong> Temporary Demo (No Database)<br>
+                    <strong>Features:</strong> PDF Parsing, Date Calculation, Webhook Ready<br>
+                    <strong>Platform:</strong> Render.com
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testHealth() {
+            fetch('/api/health')
+                .then(r => r.json())
+                .then(d => alert('✅ Health Check:\n' + JSON.stringify(d, null, 2)))
+                .catch(e => alert('❌ Error: ' + e));
+        }
+
+        function getLeads() {
+            fetch('/api/incoming-leads')
+                .then(r => r.json())
+                .then(d => alert('Incoming Leads:\n' + JSON.stringify(d, null, 2)))
+                .catch(e => alert('❌ Error: ' + e));
+        }
+
+        function viewAPI() {
+            alert('Available endpoints:\n\n' +
+                  '✓ GET /api/health\n' +
+                  '✓ POST /api/parse-dash\n' +
+                  '✓ POST /api/parse-mvr\n' +
+                  '✓ POST /api/calculate-g-dates\n' +
+                  '✓ GET/POST /api/meta-webhook\n' +
+                  '✓ GET /api/incoming-leads\n' +
+                  '✓ DELETE /api/incoming-leads/<id>\n\n' +
+                  'Ready for testing!');
+        }
+    </script>
+</body>
+</html>

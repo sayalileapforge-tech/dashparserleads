@@ -418,14 +418,14 @@ def map_extracted_to_ui_fields(parsed_data: dict) -> dict:
 
 @app.route('/', methods=['GET'])
 def index():
-    """Serve the Meta Leads Dashboard as default entry point."""
+    """Serve the Insurance Dashboard API homepage."""
     try:
         # Try multiple paths for deployed and local environments
         possible_paths = [
-            'dashboard/dashboard.html',
-            '/opt/render/project/src/dashboard/dashboard.html',
-            './dashboard/dashboard.html',
-            os.path.join(os.path.dirname(__file__), 'dashboard', 'dashboard.html')
+            'index.html',
+            '/opt/render/project/src/index.html',
+            './index.html',
+            os.path.join(os.path.dirname(__file__), 'index.html')
         ]
         
         for path in possible_paths:
@@ -434,10 +434,12 @@ def index():
                     content = f.read()
                 return Response(content, mimetype='text/html')
         
-        # If no file found, return API status
+        # Fallback: return JSON API status
         return jsonify({
             'status': 'Insurance Dashboard API Running',
             'version': '1.0',
+            'mode': 'Temporary Demo (No Database)',
+            'platform': 'Render.com',
             'endpoints': {
                 'health': '/api/health',
                 'parse_dash': '/api/parse-dash',
@@ -448,11 +450,11 @@ def index():
             }
         }), 200
     except Exception as e:
-        print(f"[ERROR] Failed to serve Meta Dashboard: {e}")
+        print(f"[ERROR] Failed to serve homepage: {e}")
         return jsonify({
             'status': 'Insurance Dashboard API Running',
-            'error': f'Dashboard HTML not found: {e}',
-            'version': '1.0'
+            'version': '1.0',
+            'error': str(e)
         }), 200
 
 @app.route('/pdf-parser', methods=['GET'])
