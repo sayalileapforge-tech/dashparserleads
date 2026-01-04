@@ -466,8 +466,27 @@
                 row.querySelector('.calc-tenant').value = lead.tenant_premium || '';
                 updateRowTotalFromRow(row);
 
-                // Renewal date
-                row.querySelector('.renewal-date').value = lead.renewal_date || '';
+                // Renewal date: show as date and (days left) if available
+                const renewalInput = row.querySelector('.renewal-date');
+                if (lead.renewal_date) {
+                    renewalInput.value = lead.renewal_date;
+                    // Add days left in a bracket next to the input (read-only span)
+                    let daysSpan = row.querySelector('.renewal-days-left');
+                    if (!daysSpan) {
+                        daysSpan = document.createElement('span');
+                        daysSpan.className = 'renewal-days-left text-xs text-slate-400 ml-2';
+                        renewalInput.parentNode.appendChild(daysSpan);
+                    }
+                    const today = new Date();
+                    const expiry = new Date(lead.renewal_date);
+                    const diffTime = expiry - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    daysSpan.textContent = `(${diffDays} days)`;
+                } else {
+                    renewalInput.value = '';
+                    let daysSpan = row.querySelector('.renewal-days-left');
+                    if (daysSpan) daysSpan.textContent = '';
+                }
 
                 // Process button
                 row.querySelector('.process-btn').dataset.leadId = lead.id;

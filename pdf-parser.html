@@ -1842,18 +1842,17 @@
                     if (data.licence_expiry_date && data.licence_expiry_date !== 'Not available in document') {
                         console.log(`[MVR] Setting expiry date to: ${data.licence_expiry_date}`);
                         document.getElementById('mvr-expiry').textContent = data.licence_expiry_date;
-                        
-                        // Calculate years until expiry ONLY if expiry date exists
-                        const expiryDate = new Date(data.licence_expiry_date);
-                        const today = new Date();
-                        const yearsLeft = ((expiryDate - today) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1);
-                        
-                        if (yearsLeft > 0) {
-                            console.log(`[MVR] Setting experience (years) to: ${yearsLeft}`);
-                            document.getElementById('mvr-experience').textContent = `${yearsLeft}`;
+
+                        // Calculate experience in years from issue date if available
+                        if (data.issue_date && data.issue_date !== 'Not available in document') {
+                            const issueDate = new Date(data.issue_date);
+                            const today = new Date();
+                            let yearsExp = (today - issueDate) / (1000 * 60 * 60 * 24 * 365.25);
+                            yearsExp = yearsExp > 0 ? yearsExp.toFixed(1) : '0';
+                            console.log(`[MVR] Calculated experience (years) from issue date: ${yearsExp}`);
+                            document.getElementById('mvr-experience').textContent = yearsExp;
                         } else {
-                            console.log(`[MVR] Licence expired`);
-                            document.getElementById('mvr-experience').textContent = '0';
+                            document.getElementById('mvr-experience').textContent = '—';
                         }
                     } else {
                         console.log(`[MVR] Expiry date not available`);
@@ -2184,21 +2183,20 @@
                 // Current Policy
                 document.getElementById('prev-company').textContent = dashData.current_company || '—';
                 
-                // Calculate expiry days
+                // Calculate expiry days and show as date (days left/expired)
                 if (dashData.current_policy_expiry) {
                     const expiryDate = new Date(dashData.current_policy_expiry);
                     const today = new Date();
                     const daysLeft = Math.floor((expiryDate - today) / (1000 * 60 * 60 * 24));
-                    
+                    const expiryDateStr = expiryDate.toLocaleDateString('en-CA'); // YYYY-MM-DD
                     let daysText = '—';
                     if (daysLeft > 0) {
-                        daysText = `${daysLeft} days`;
+                        daysText = `${expiryDateStr} (expiring in ${daysLeft} days)`;
                     } else if (daysLeft < 0) {
-                        daysText = `EXPIRED - ${Math.abs(daysLeft)} days ago`;
+                        daysText = `${expiryDateStr} (EXPIRED - ${Math.abs(daysLeft)} days ago)`;
                     } else {
-                        daysText = 'Today';
+                        daysText = `${expiryDateStr} (Today)`;
                     }
-                    
                     document.getElementById('prev-days-expiry').textContent = daysText;
                     document.getElementById('prev-days-expiry').className = daysLeft < 0 ? 'text-sm font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded' : 'text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded';
                 }
@@ -2233,13 +2231,23 @@
                 document.getElementById('mvr-birthdate').textContent = mvrData.birth_date || '—';
                 document.getElementById('mvr-expiry').textContent = mvrData.licence_expiry_date || '—';
                 document.getElementById('mvr-convictions').textContent = mvrData.convictions_count || '—';
-                
-                // Calculate years until expiry
-                if (mvrData.licence_expiry_date) {
-                    const expiryDate = new Date(mvrData.licence_expiry_date);
+
+                // Calculate experience in years from issue date if available
+                if (mvrData.issue_date && mvrData.issue_date !== 'Not available in document') {
+                    const issueDate = new Date(mvrData.issue_date);
                     const today = new Date();
-                    const yearsLeft = ((expiryDate - today) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1);
-                    document.getElementById('mvr-experience').textContent = yearsLeft > 0 ? yearsLeft : '0';
+                    let yearsExp = (today - issueDate) / (1000 * 60 * 60 * 24 * 365.25);
+                    if (!isNaN(issueDate.getTime())) {
+                        if (yearsExp >= 0) {
+                            document.getElementById('mvr-experience').textContent = yearsExp.toFixed(1);
+                        } else {
+                            document.getElementById('mvr-experience').textContent = '0';
+                        }
+                    } else {
+                        document.getElementById('mvr-experience').textContent = '—';
+                    }
+                } else {
+                    document.getElementById('mvr-experience').textContent = '—';
                 }
                 
                 // Convictions list
