@@ -836,7 +836,7 @@
                     </div>
 
                     <!-- Combinations -->
-                    <div class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
+                    <div id="combinations-section" class="bg-white rounded-xl shadow-card border border-slate-100 p-6">
                         <h3 class="text-xs font-bold text-indigo-900 uppercase tracking-widest mb-6 pb-2 border-b border-indigo-50 flex items-center gap-2">
                             <i class="fa-solid fa-layer-group text-indigo-400"></i> Combinations
                         </h3>
@@ -2051,6 +2051,18 @@
                     }
                 } else if (data.error) {
                     console.error(`[COMBINATION] Calculation error: ${data.error}`);
+                    // If error is about insufficient experience, show in UI
+                    if (data.error && data.error.toLowerCase().includes('less than 5 years')) {
+                        parsedGDates[driverNum] = {
+                            message: data.error,
+                            g_date: '',
+                            g2_date: '',
+                            g1_date: ''
+                        };
+                        if (currentDisplayDriver === driverNum) {
+                            switchDriverView(driverNum);
+                        }
+                    }
                 } else {
                     console.log(`[COMBINATION] Note: ${data.note}`);
                 }
@@ -2279,6 +2291,13 @@
             
             // Display G/G1/G2 dates if calculated
             const gDates = parsedGDates[driverId];
+            // Remove any previous warning message in the Combinations section
+            let combSection = document.getElementById('combinations-section');
+            if (combSection) {
+                let warnEl = combSection.querySelector('#combination-warning');
+                if (warnEl) warnEl.remove();
+            }
+
             if (gDates) {
                 if (gDates.message) {
                     // Insufficient experience message
@@ -2288,6 +2307,15 @@
                     document.getElementById('copy-g-date').placeholder = gDates.message;
                     document.getElementById('copy-g2-date').placeholder = gDates.message;
                     document.getElementById('copy-g1-date').placeholder = gDates.message;
+                    // Show warning in Combinations section only
+                    let combSection = document.getElementById('combinations-section');
+                    if (combSection && !combSection.querySelector('#combination-warning')) {
+                        const msgDiv = document.createElement('div');
+                        msgDiv.id = 'combination-warning';
+                        msgDiv.className = 'mt-4 mb-2 text-sm font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded px-4 py-2 flex items-center gap-2';
+                        msgDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-2"></i>' + gDates.message;
+                        combSection.insertBefore(msgDiv, combSection.firstChild.nextSibling);
+                    }
                     console.log(`[DISPLAY] Showing insufficient experience message for driver ${driverId}`);
                 } else {
                     // Show calculated dates
