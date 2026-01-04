@@ -158,92 +158,121 @@ class DatabaseManager:
             phone = data.get('phone', '')
             email = data.get('email', '')
             
-            # Insert customer
-            customer_query = """
-                INSERT INTO customers (name, phone, email, created_at)
-                VALUES (%s, %s, %s, NOW())
+            # Insert or update meta_leads
+            lead_query = """
+                INSERT INTO meta_leads (full_name, phone, email)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE phone=VALUES(phone), email=VALUES(email)
             """
-            cursor.execute(customer_query, (customer_name, phone, email))
-            customer_id = cursor.lastrowid
-            
-            # Insert auto quote
+            cursor.execute(lead_query, (customer_name, phone, email))
+            conn.commit()
+            cursor.execute("SELECT id FROM meta_leads WHERE email=%s", (email,))
+            lead_id = cursor.fetchone()[0]
+
+            # Insert into complete_quotes
             quote_query = """
-                INSERT INTO auto_quotes (customer_id, ownership, vehicle_use, annual_km, 
-                                        winter_tires, anti_theft, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                INSERT INTO complete_quotes (lead_id, quote_type, quote_status)
+                VALUES (%s, 'auto', 'draft')
+                ON DUPLICATE KEY UPDATE quote_type='auto'
             """
-            cursor.execute(quote_query, (
-                customer_id,
-                data.get('ownership', 'owned'),
-                data.get('use', 'pleasure'),
-                data.get('annualKm', 0),
-                data.get('winterTires', 'no'),
-                data.get('antiTheft', 'no')
-            ))
-            quote_id = cursor.lastrowid
-            
-            # Insert drivers
-            drivers = data.get('drivers', [])
-            for driver in drivers:
-                driver_query = """
-                    INSERT INTO drivers (quote_id, name, dln, dob, address, 
-                                        license_class, license_status, issue_date, 
-                                        expiry_date, province, relationship, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                """
-                cursor.execute(driver_query, (
-                    quote_id,
-                    driver.get('name'),
-                    driver.get('dln'),
-                    driver.get('dob'),
-                    driver.get('address'),
-                    driver.get('licenseClass'),
-                    driver.get('licenseStatus'),
-                    driver.get('issueDate'),
-                    driver.get('expiryDate'),
-                    driver.get('province'),
-                    driver.get('rel', 'applicant')
-                ))
-                driver_id = cursor.lastrowid
-                
-                # Insert driver documents (if parsing was done)
-                if driver.get('parsed_from_dash'):
-                    doc_query = """
-                        INSERT INTO driver_documents (driver_id, document_type, 
-                                                     file_path, extracted_data, created_at)
-                        VALUES (%s, %s, %s, %s, NOW())
-                    """
-                    cursor.execute(doc_query, (
-                        driver_id,
-                        'dash',
-                        driver.get('file_path', ''),
-                        json.dumps(driver.get('extracted_data', {}))
-                    ))
-            
+            cursor.execute(quote_query, (lead_id,))
+            conn.commit()
+            cursor.execute("SELECT id FROM complete_quotes WHERE lead_id=%s", (lead_id,))
+            quote_id = cursor.fetchone()[0]
+
             # Insert vehicles
             vehicles = data.get('vehicles', [])
-            for vehicle in vehicles:
+            for idx, vehicle in enumerate(vehicles, 1):
                 vehicle_query = """
-                    INSERT INTO vehicles (quote_id, year, make, model, vin, 
-                                         plate_number, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    INSERT INTO vehicle_details (lead_id, vehicle_sequence, year, make, model, body_type, vin, license_plate, annual_km, vehicle_use, ownership_type, winter_tires, anti_theft_device)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE year=VALUES(year), make=VALUES(make), model=VALUES(model)
                 """
                 cursor.execute(vehicle_query, (
-                    quote_id,
+                    lead_id,
+                    idx,
                     vehicle.get('year'),
                     vehicle.get('make'),
                     vehicle.get('model'),
+                    vehicle.get('body_type'),
                     vehicle.get('vin'),
-                    vehicle.get('plateNumber')
+                    vehicle.get('plateNumber'),
+                    vehicle.get('annual_km'),
+                    vehicle.get('vehicle_use'),
+                    vehicle.get('ownership_type'),
+                    vehicle.get('winter_tires'),
+                    vehicle.get('anti_theft_device')
                 ))
-            
+
+            # Insert drivers as manual_entry_data
+            drivers = data.get('drivers', [])
+            for driver in drivers:
+                manual_query = """
+                    INSERT INTO manual_entry_data (lead_id, full_name, date_of_birth, gender, marital_status, address, license_number, license_class, license_issue_date, license_expiry_date, first_insurance_date, years_continuous_insurance, years_claims_free, total_claims_6y, at_fault_claims_6y, first_party_claims_6y, comprehensive_claims_6y, dcpd_claims_6y, current_company, current_policy_number, current_policy_expiry, current_operators_count, current_vehicles_count)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(manual_query, (
+                    lead_id,
+                    driver.get('name'),
+                    driver.get('dob'),
+                    driver.get('gender'),
+                    driver.get('marital_status'),
+                    driver.get('address'),
+                    driver.get('dln'),
+                    driver.get('licenseClass'),
+                    driver.get('issueDate'),
+                    driver.get('expiryDate'),
+                    driver.get('first_insurance_date'),
+                    driver.get('years_continuous_insurance'),
+                    driver.get('years_claims_free'),
+                    driver.get('total_claims_6y'),
+                    driver.get('at_fault_claims_6y'),
+                    driver.get('first_party_claims_6y'),
+                    driver.get('comprehensive_claims_6y'),
+                    driver.get('dcpd_claims_6y'),
+                    driver.get('current_company'),
+                    driver.get('current_policy_number'),
+                    driver.get('current_policy_expiry'),
+                    driver.get('current_operators_count'),
+                    driver.get('current_vehicles_count')
+                ))
+
+            # Insert parsed PDF data if present
+            if data.get('parsed_pdf_data'):
+                pdf = data['parsed_pdf_data']
+                pdf_query = """
+                    INSERT INTO parsed_pdf_data (lead_id, document_type, raw_extracted_data)
+                    VALUES (%s, %s, %s)
+                """
+                cursor.execute(pdf_query, (
+                    lead_id,
+                    pdf.get('document_type'),
+                    json.dumps(pdf)
+                ))
+
+            # Insert claims history if present
+            if data.get('claims_history'):
+                for claim in data['claims_history']:
+                    claim_query = """
+                        INSERT INTO claims_history (lead_id, source_table, claim_date, claim_type, amount, description, status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(claim_query, (
+                        lead_id,
+                        claim.get('source_table'),
+                        claim.get('claim_date'),
+                        claim.get('claim_type'),
+                        claim.get('amount'),
+                        claim.get('description'),
+                        claim.get('status')
+                    ))
+
             conn.commit()
-            
-            print(f"✅ Quote {quote_id} saved successfully")
+            print(f"✅ Quote {quote_id} saved successfully (enhanced schema)")
             return {
                 'success': True,
                 'quote_id': quote_id,
-                'customer_id': customer_id
+                'lead_id': lead_id
             }
             
         except Error as e:
@@ -495,17 +524,28 @@ def get_leads():
         
         print(f"[API] /api/leads - search: {search}, page: {page}, status: {status}")
         
-        # Fetch leads from Meta API first
-        fetcher = get_fetcher()
-        meta_leads = fetcher.fetch_leads(limit=1000)  # Fetch up to 1000 leads
-        
-        if meta_leads:
-            print(f"[API] Got {len(meta_leads)} leads from Meta API")
-            all_leads = meta_leads
-        else:
-            # Fallback to sample data if Meta API fails or no credentials
-            print(f"[API] Meta API returned no leads - using sample data")
-            all_leads = [
+        # Fetch leads from MySQL if available, else Meta API, else sample
+        all_leads = []
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM meta_leads ORDER BY created_at DESC LIMIT 1000")
+                all_leads = cursor.fetchall()
+                cursor.close()
+                conn.close()
+                print(f"[API] Got {len(all_leads)} leads from MySQL")
+        except Exception as db_e:
+            print(f"[API] MySQL fetch failed: {db_e}")
+        if not all_leads:
+            fetcher = get_fetcher()
+            meta_leads = fetcher.fetch_leads(limit=1000)
+            if meta_leads:
+                print(f"[API] Got {len(meta_leads)} leads from Meta API")
+                all_leads = meta_leads
+            else:
+                print(f"[API] Meta API returned no leads - using sample data")
+                all_leads = [
                 {
                     'id': 1,
                     'full_name': 'Anchit Parveen Gupta',
@@ -910,11 +950,68 @@ def save_property_quote():
         if not data.get('name'):
             return jsonify({'error': 'Name is required'}), 400
         
-        # TODO: Implement property quote saving
-        return jsonify({
-            'success': True,
-            'message': 'Property quote saved successfully'
-        }), 201
+        # Save property quote to MySQL
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                # Insert into meta_leads if not exists
+                lead_query = """
+                    INSERT INTO meta_leads (full_name, phone, email)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE phone=VALUES(phone), email=VALUES(email)
+                """
+                cursor.execute(lead_query, (data.get('name'), data.get('phone'), data.get('email')))
+                conn.commit()
+                # Get lead_id
+                cursor.execute("SELECT id FROM meta_leads WHERE email=%s", (data.get('email'),))
+                lead_id = cursor.fetchone()[0]
+                # Insert property details
+                for prop in data.get('properties', []):
+                    prop_query = """
+                        INSERT INTO property_details (lead_id, property_type, address, city, postal_code, province, year_built, square_footage, number_of_storeys, number_of_units, owner_occupied, purchased_date, first_insured_year, has_mortgage, lender_name, full_bathrooms, half_bathrooms, bedrooms, has_burglar_alarm, has_fire_alarm, has_sprinkler_system, has_deadbolts, electrical_status, plumbing_status, roofing_status, heating_status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(prop_query, (
+                        lead_id,
+                        prop.get('property_type'),
+                        prop.get('address'),
+                        prop.get('city'),
+                        prop.get('postal_code'),
+                        prop.get('province'),
+                        prop.get('year_built'),
+                        prop.get('square_footage'),
+                        prop.get('number_of_storeys'),
+                        prop.get('number_of_units'),
+                        prop.get('owner_occupied'),
+                        prop.get('purchased_date'),
+                        prop.get('first_insured_year'),
+                        prop.get('has_mortgage'),
+                        prop.get('lender_name'),
+                        prop.get('full_bathrooms'),
+                        prop.get('half_bathrooms'),
+                        prop.get('bedrooms'),
+                        prop.get('has_burglar_alarm'),
+                        prop.get('has_fire_alarm'),
+                        prop.get('has_sprinkler_system'),
+                        prop.get('has_deadbolts'),
+                        prop.get('electrical_status'),
+                        prop.get('plumbing_status'),
+                        prop.get('roofing_status'),
+                        prop.get('heating_status')
+                    ))
+                conn.commit()
+                cursor.close()
+                conn.close()
+                return jsonify({
+                    'success': True,
+                    'message': 'Property quote saved successfully',
+                    'lead_id': lead_id
+                }), 201
+            else:
+                return jsonify({'error': 'Database not available'}), 500
+        except Exception as db_e:
+            return jsonify({'error': f'Database error: {db_e}'}), 500
         
     except Exception as e:
         return jsonify({
@@ -1337,7 +1434,38 @@ def meta_webhook():
                                     'field_data': lead_data.get('field_data', []),
                                     'timestamp': datetime.now().isoformat()
                                 })
-                                
+                                # Also persist to MySQL meta_leads
+                                try:
+                                    conn = get_db_connection()
+                                    if conn:
+                                        cursor = conn.cursor()
+                                        # Extract fields
+                                        full_name = ''
+                                        email = ''
+                                        phone = ''
+                                        for f in lead_data.get('field_data', []):
+                                            if f.get('name') == 'full_name':
+                                                full_name = f.get('values', [''])[0]
+                                            if f.get('name') == 'email':
+                                                email = f.get('values', [''])[0]
+                                            if f.get('name') == 'phone_number':
+                                                phone = f.get('values', [''])[0]
+                                        lead_query = """
+                                            INSERT INTO meta_leads (meta_lead_id, full_name, email, phone, created_at)
+                                            VALUES (%s, %s, %s, %s, NOW())
+                                            ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), email=VALUES(email), phone=VALUES(phone)
+                                        """
+                                        cursor.execute(lead_query, (
+                                            lead_data.get('leadgen_id'),
+                                            full_name,
+                                            email,
+                                            phone
+                                        ))
+                                        conn.commit()
+                                        cursor.close()
+                                        conn.close()
+                                except Exception as db_e:
+                                    print(f"[META WEBHOOK] MySQL persist error: {db_e}")
                                 print(f"[META WEBHOOK] Lead received: {lead_data.get('leadgen_id')}")
             
             # Always return 200 OK to Meta
