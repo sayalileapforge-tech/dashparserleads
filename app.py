@@ -1529,8 +1529,55 @@ def update_lead_signal(lead_id):
         finally:
             if conn:
                 conn.close()
-        
-        return jsonify({'success': True, 'message': 'Signal updated'}), 200
+
+        # Send signal to Facebook Conversions API
+        import requests, time, hashlib, os
+        pixel_id = os.getenv('FB_PIXEL_ID', '2251357192000496')
+        access_token = os.getenv('FB_PIXEL_TOKEN', '')
+        fb_url = f'https://graph.facebook.com/v18.0/{pixel_id}/events?access_token={access_token}'
+
+        # Optionally fetch user data from DB for hashing
+        user_email = ''
+        user_phone = ''
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT email, phone FROM meta_leads WHERE meta_lead_id=%s", (lead_id,))
+                row = cursor.fetchone()
+                if row:
+                    user_email = row.get('email', '') or ''
+                    user_phone = row.get('phone', '') or ''
+                cursor.close()
+                conn.close()
+        except Exception as e:
+            print(f"[FB] Could not fetch user data for hashing: {e}")
+
+        def hash_data(data):
+            return hashlib.sha256(data.strip().lower().encode()).hexdigest() if data else ''
+
+        payload = {
+            "data": [
+                {
+                    "event_name": "Signal",
+                    "event_time": int(time.time()),
+                    "user_data": {
+                        "em": [hash_data(user_email)] if user_email else [],
+                        "ph": [hash_data(user_phone)] if user_phone else []
+                    },
+                    "custom_data": {
+                        "signal": signal_value
+                    }
+                }
+            ]
+        }
+        try:
+            fb_resp = requests.post(fb_url, json=payload, timeout=10)
+            print(f"[FB] Signal sent to Conversions API: {fb_resp.status_code} {fb_resp.text}")
+        except Exception as fb_e:
+            print(f"[FB] Error sending signal to Conversions API: {fb_e}")
+
+        return jsonify({'success': True, 'message': 'Signal updated and sent to Facebook'}), 200
     except Exception as e:
         print(f"[API] Error updating signal: {str(e)}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
