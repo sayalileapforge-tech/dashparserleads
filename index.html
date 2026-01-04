@@ -296,7 +296,7 @@
             leadStatus: (id) => `${API_BASE_URL}/api/leads/${id}`,
             leadSignal: (id) => `${API_BASE_URL}/api/leads/${id}/signal`,
             processLead: (id) => `${API_BASE_URL}/api/process/${id}`,
-            sendToEventManager: (id) => `${API_BASE_URL}/api/events/send-lead/${id}`,
+            sendToEventManager: (id) => `${API_BASE_URL}/api/leads/${id}/signal`,
         };
 
         // State management
@@ -695,8 +695,9 @@
         async function sendLeadToEventManager(leadId, name, timestampEl, btn) {
             try {
                 const response = await fetch(API_ENDPOINTS.sendToEventManager(leadId), {
-                    method: 'POST',
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ signal: 'green' })
                 });
 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
