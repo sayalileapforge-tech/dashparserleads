@@ -1,0 +1,28 @@
+-- Table for storing all driver quick info and input data
+CREATE TABLE IF NOT EXISTS driver_info (
+    id SERIAL PRIMARY KEY,
+    lead_id INTEGER REFERENCES leads(id) ON DELETE CASCADE,
+    full_name VARCHAR(255),
+    date_of_birth DATE,
+    gender VARCHAR(20),
+    marital_status VARCHAR(50),
+    address TEXT,
+    license_number VARCHAR(100),
+    license_class VARCHAR(20),
+    license_issue_date DATE,
+    license_expiry_date DATE,
+    first_insurance_date DATE,
+    years_continuous_insurance INTEGER,
+    years_claims_free INTEGER,
+    total_claims_6y INTEGER,
+    at_fault_claims_6y INTEGER,
+    first_party_claims_6y INTEGER,
+    comprehensive_claims_6y INTEGER,
+    dcpd_claims_6y INTEGER,
+    current_company VARCHAR(255),
+    current_policy_number VARCHAR(100),
+    current_policy_expiry DATE,
+    current_operators_count INTEGER,
+    current_vehicles_count INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

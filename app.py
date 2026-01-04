@@ -26,8 +26,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    import mysql.connector
-    from mysql.connector import Error
+    import psycopg2
+    import psycopg2.extras
+    from psycopg2 import OperationalError
 except:
     Error = Exception  # Fallback if mysql not available
 
@@ -56,24 +57,20 @@ CORS(app)
 
 # Database connection
 def get_db_connection():
-    """Get MySQL database connection with environment variables"""
+    """Get PostgreSQL database connection with environment variables"""
     try:
-        # Get from environment variables (for Render/production) or use defaults (for local)
-        host = os.getenv('MYSQL_HOST', 'localhost')
-        port = int(os.getenv('MYSQL_PORT', 3306))
-        user = os.getenv('MYSQL_USER', 'root')
-        password = os.getenv('MYSQL_PASSWORD', 'root@123')
-        database = os.getenv('MYSQL_DATABASE', 'insurance_leads')
-        
-        conn = mysql.connector.connect(
-            host=host,
-            port=port,
-            user=user,
-            password=password,
-            database=database
-        )
+        db_url = os.getenv('DATABASE_URL')
+        if not db_url:
+            db_url = (
+                f"dbname={os.getenv('PG_DB', 'insurance_details')} "
+                f"user={os.getenv('PG_USER', 'insurance_details_user')} "
+                f"password={os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')} "
+                f"host={os.getenv('PG_HOST', 'dpg-d5daccmr433s73ad8e70-a')} "
+                f"port={os.getenv('PG_PORT', 5432)}"
+            )
+        conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
         return conn
-    except Error as e:
+    except OperationalError as e:
         print(f"Database connection error: {e}")
         return None
 
@@ -123,18 +120,14 @@ DB_CONFIG = {
 
 
 class DatabaseManager:
-    """Handle database operations."""
-    
+    """Handle database operations for PostgreSQL."""
     @staticmethod
     def get_connection():
-        """Create database connection."""
         try:
-            conn = mysql.connector.connect(**DB_CONFIG)
-            return conn
-        except Error as e:
+            return get_db_connection()
+        except Exception as e:
             print(f"❌ Database error: {str(e)}")
             raise
-    
     @staticmethod
     def save_auto_quote(data: dict) -> dict:
         """
@@ -162,23 +155,23 @@ class DatabaseManager:
             lead_query = """
                 INSERT INTO meta_leads (full_name, phone, email)
                 VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE phone=VALUES(phone), email=VALUES(email)
+                ON CONFLICT (email) DO UPDATE SET phone=EXCLUDED.phone, full_name=EXCLUDED.full_name
             """
             cursor.execute(lead_query, (customer_name, phone, email))
             conn.commit()
             cursor.execute("SELECT id FROM meta_leads WHERE email=%s", (email,))
-            lead_id = cursor.fetchone()[0]
+            lead_id = cursor.fetchone()["id"]
 
             # Insert into complete_quotes
             quote_query = """
                 INSERT INTO complete_quotes (lead_id, quote_type, quote_status)
                 VALUES (%s, 'auto', 'draft')
-                ON DUPLICATE KEY UPDATE quote_type='auto'
+                ON CONFLICT (lead_id) DO UPDATE SET quote_type='auto'
             """
             cursor.execute(quote_query, (lead_id,))
             conn.commit()
             cursor.execute("SELECT id FROM complete_quotes WHERE lead_id=%s", (lead_id,))
-            quote_id = cursor.fetchone()[0]
+            quote_id = cursor.fetchone()["id"]
 
             # Insert vehicles
             vehicles = data.get('vehicles', [])
@@ -186,7 +179,7 @@ class DatabaseManager:
                 vehicle_query = """
                     INSERT INTO vehicle_details (lead_id, vehicle_sequence, year, make, model, body_type, vin, license_plate, annual_km, vehicle_use, ownership_type, winter_tires, anti_theft_device)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE year=VALUES(year), make=VALUES(make), model=VALUES(model)
+                    ON CONFLICT (lead_id, vehicle_sequence) DO UPDATE SET year=EXCLUDED.year, make=EXCLUDED.make, model=EXCLUDED.model
                 """
                 cursor.execute(vehicle_query, (
                     lead_id,
@@ -275,7 +268,7 @@ class DatabaseManager:
                 'lead_id': lead_id
             }
             
-        except Error as e:
+        except Exception as e:
             if conn:
                 conn.rollback()
             print(f"❌ Database error: {str(e)}")
@@ -1507,7 +1500,7 @@ def update_lead_signal(lead_id):
         
         print(f"[DB] Updating lead {lead_id} signal to: {signal_value}", flush=True)
         
-        # Try to save to MySQL if available
+        # Try to save to PostgreSQL if available
         conn = None
         try:
             conn = get_db_connection()
@@ -1516,14 +1509,14 @@ def update_lead_signal(lead_id):
                 query = """
                     INSERT INTO meta_leads (meta_lead_id, full_name, signal)
                     VALUES (%s, 'Unknown', %s)
-                    ON DUPLICATE KEY UPDATE signal = VALUES(signal)
+                    ON CONFLICT (meta_lead_id) DO UPDATE SET signal = EXCLUDED.signal
                 """
                 cursor.execute(query, (lead_id, signal_value))
                 conn.commit()
                 cursor.close()
-                print(f"[DB] ✓ Lead {lead_id} signal saved to MySQL", flush=True)
+                print(f"[DB] ✓ Lead {lead_id} signal saved to PostgreSQL", flush=True)
             else:
-                print(f"[DB] MySQL not available - signal not persisted", flush=True)
+                print(f"[DB] PostgreSQL not available - signal not persisted", flush=True)
         except Exception as db_error:
             print(f"[DB] Error saving signal: {db_error}", flush=True)
         finally:
@@ -1542,7 +1535,7 @@ def update_lead_signal(lead_id):
         try:
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor(dictionary=True)
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
                 cursor.execute("SELECT email, phone FROM meta_leads WHERE meta_lead_id=%s", (lead_id,))
                 row = cursor.fetchone()
                 if row:
