@@ -93,18 +93,27 @@ def get_db_connection():
         if PG8000_AVAILABLE:
             try:
                 if db_url:
-                    # Parse postgresql://user:password@host:port/dbname
+                    # Handle postgres:// or postgresql://
+                    # Format: postgresql://user:password@host:port/dbname
+                    url_clean = db_url.replace('postgres://', 'postgresql://')
                     import re
-                    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
+                    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', url_clean)
                     if match:
                         user, password, host, port, db = match.groups()
+                        port = int(port)
                     else:
-                        # Try alternative format
-                        user = os.getenv('PG_USER', 'insurance_details_user')
-                        password = os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')
-                        host = os.getenv('PG_HOST', 'dpg-d5daccmr433s73ad8e70-a')
-                        port = int(os.getenv('PG_PORT', 5432))
-                        db = os.getenv('PG_DB', 'insurance_details')
+                        # Try format without port: postgresql://user:password@host/dbname
+                        match = re.match(r'postgresql://([^:]+):([^@]+)@([^/]+)/(.+)', url_clean)
+                        if match:
+                            user, password, host, db = match.groups()
+                            port = 5432
+                        else:
+                            # Fallback to env vars
+                            user = os.getenv('PG_USER', 'insurance_details_user')
+                            password = os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')
+                            host = os.getenv('PG_HOST', 'dpg-d5daccmr433s73ad8e70-a')
+                            port = int(os.getenv('PG_PORT', 5432))
+                            db = os.getenv('PG_DB', 'insurance_details')
                 else:
                     user = os.getenv('PG_USER', 'insurance_details_user')
                     password = os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')
@@ -112,15 +121,16 @@ def get_db_connection():
                     port = int(os.getenv('PG_PORT', 5432))
                     db = os.getenv('PG_DB', 'insurance_details')
                 
+                print(f"[DB] Attempting pg8000 connection to {host}:{port}/{db}")
                 conn = pg8000.connect(
                     user=user,
                     password=password,
                     host=host,
                     port=port,
                     database=db,
-                    timeout=5
+                    timeout=10
                 )
-                print("[DB] ✓ Connected to PostgreSQL using pg8000 (pure Python driver)")
+                print("[DB] ✓ Connected to PostgreSQL using pg8000")
                 return conn
             except Exception as e:
                 print(f"[DB] pg8000 connection failed: {e}")
@@ -139,7 +149,9 @@ def get_db_connection():
         # Fall back to psycopg2
         if PSYCOPG2_AVAILABLE and psycopg2 is not None:
             try:
-                conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+                # psycopg2 requires postgresql:// instead of postgres://
+                psycopg2_url = db_url.replace('postgres://', 'postgresql://') if db_url else None
+                conn = psycopg2.connect(psycopg2_url, cursor_factory=psycopg2.extras.RealDictCursor)
                 print("[DB] ✓ Connected to PostgreSQL using psycopg2")
                 return conn
             except Exception as e2:

@@ -8,5 +8,7 @@ pydantic==2.8.0
 pydantic-settings==2.2.0
 Werkzeug==2.3.7
 psycopg2-binary==2.9.9
+pg8000==1.30.3
+python-dotenv==1.0.0
 
 
