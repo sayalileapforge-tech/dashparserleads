@@ -1640,16 +1640,19 @@ def update_lead_premium(lead_id):
             conn = get_db_connection()
             if conn:
                 try:
-                    # We'll store the total in the 'premium' column for now
-                    # If we want to store individual ones, we'd need to add columns
+                    # Store total and individual premiums
                     query = """
-                        INSERT INTO leads (meta_lead_id, premium, full_name)
-                        VALUES (%s, %s, 'Lead')
+                        INSERT INTO leads (meta_lead_id, premium, premium_auto, premium_home, premium_tenant, full_name)
+                        VALUES (%s, %s, %s, %s, %s, 'Lead')
                         ON CONFLICT (meta_lead_id) DO UPDATE 
-                        SET premium = EXCLUDED.premium, updated_at = CURRENT_TIMESTAMP
+                        SET premium = EXCLUDED.premium, 
+                            premium_auto = EXCLUDED.premium_auto,
+                            premium_home = EXCLUDED.premium_home,
+                            premium_tenant = EXCLUDED.premium_tenant,
+                            updated_at = CURRENT_TIMESTAMP
                     """
-                    execute_db_update(conn, query, (lead_id, total_premium))
-                    print(f"[DB] ✓ Lead {lead_id} total premium saved to PostgreSQL", flush=True)
+                    execute_db_update(conn, query, (lead_id, total_premium, auto_premium, home_premium, tenant_premium))
+                    print(f"[DB] ✓ Lead {lead_id} premiums saved to PostgreSQL", flush=True)
                     return jsonify({'success': True, 'message': 'Premium updated'}), 200
                 except Exception as db_error:
                     print(f"[DB] Error saving to PostgreSQL: {db_error}", flush=True)
@@ -1905,6 +1908,109 @@ def save_quote_data():
     except Exception as e:
         print(f"[API] Error saving quote: {str(e)}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================
+# LIVE DATABASE VIEW FOR CLIENT
+# ============================================================
+
+def init_db():
+    """Initialize database tables if they don't exist"""
+    conn = get_db_connection()
+    if not conn: return
+    try:
+        cursor = conn.cursor()
+        # Ensure all columns exist for persistence
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS leads (
+                meta_lead_id TEXT PRIMARY KEY,
+                full_name TEXT,
+                email TEXT,
+                phone TEXT,
+                status TEXT DEFAULT 'new',
+                renewal_date TEXT,
+                signal TEXT DEFAULT 'red',
+                premium TEXT,
+                premium_auto TEXT,
+                premium_home TEXT,
+                premium_tenant TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        print("[DB] Tables initialized successfully")
+    except Exception as e:
+        print(f"[DB] Error initializing tables: {e}")
+    finally:
+        conn.close()
+
+# Initialize DB on startup
+init_db()
+
+@app.route('/db-view')
+def db_view():
+    """Live view of the PostgreSQL database for the client"""
+    conn = get_db_connection()
+    if not conn: 
+        return "<h1>Database Connection Failed</h1><p>Check Render Environment Variables.</p>", 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM leads ORDER BY updated_at DESC")
+        
+        # Handle different driver return types
+        if PG8000_AVAILABLE:
+            columns = [desc[0] for desc in cursor.description]
+            rows = cursor.fetchall()
+        else:
+            # For psycopg2 RealDictCursor or similar
+            try:
+                rows = cursor.fetchall()
+                if rows and isinstance(rows[0], dict):
+                    columns = list(rows[0].keys())
+                    rows = [list(r.values()) for r in rows]
+                else:
+                    columns = [desc[0] for desc in cursor.description]
+            except:
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+        
+        html = f\"\"\"
+        <html><head><title>Live DB View</title>
+        <style>
+            table{{border-collapse:collapse;width:100%;font-family:sans-serif;font-size:12px;}}
+            th,td{{border:1px solid #ddd;padding:8px;text-align:left;}}
+            th{{background-color:#4f46e5;color:white;position:sticky;top:0;}}
+            tr:nth-child(even){{background-color:#f9fafb;}}
+            tr:hover{{background-color:#f3f4f6;}}
+            .status-new{{color:#2563eb;font-weight:bold;}}
+            .status-won{{color:#059669;font-weight:bold;}}
+        </style></head><body>
+        <div style="padding:20px;">
+            <h1>PostgreSQL Live Records</h1>
+            <p>Showing latest updates first. Total records: <b>{{len(rows)}}</b></p>
+            <table><tr>\"\"\"
+        
+        for col in columns: html += f"<th>{{col}}</th>"
+        html += "</tr>"
+        
+        for row in rows:
+            html += "<tr>"
+            for i, val in enumerate(row):
+                cell_class = ""
+                if columns[i] == 'status':
+                    if val == 'new': cell_class = 'class="status-new"'
+                    if val == 'closed_won': cell_class = 'class="status-won"'
+                html += f"<td {{cell_class}}>{{val if val is not None else ''}}</td>"
+            html += "</tr>"
+            
+        html += "</table></div></body></html>"
+        cursor.close()
+        conn.close()
+        return html
+    except Exception as e:
+        return f"<h1>Error Fetching Data</h1><p>{{str(e)}}</p>", 500
 
 
 # Error handlers
