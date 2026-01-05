@@ -290,7 +290,7 @@
         // ===========================
         // API Configuration
         // ===========================
-        const API_BASE_URL = 'http://localhost:3001';
+        const API_BASE_URL = 'https://dashparserleads-1.onrender.com';
         const API_ENDPOINTS = {
             leads: `${API_BASE_URL}/api/leads`,
             leadStatus: (id) => `${API_BASE_URL}/api/leads/${id}`,
@@ -332,7 +332,7 @@
                 return data;
             } catch (error) {
                 console.error('Error fetching leads:', error);
-                showError('Failed to fetch leads. Make sure backend is running on http://localhost:3001');
+                showError('Failed to fetch leads. Please check your connection or backend status.');
             }
         }
 
@@ -497,13 +497,24 @@
             const contactedCount = leads.filter(l => l.status === 'contacted').length;
             const quoteCount = leads.filter(l => l.status === 'quote_sent').length;
             const closedCount = leads.filter(l => l.status === 'closed_won').length;
-            const totalRevenue = leads.reduce((sum, l) => sum + (l.auto_premium || 0) + (l.home_premium || 0) + (l.tenant_premium || 0), 0);
+            
+            // Calculate total revenue from Closed Won leads
+            const totalRevenue = leads.reduce((sum, l) => {
+                if (l.status === 'closed_won') {
+                    const auto = parseFloat(l.auto_premium) || 0;
+                    const home = parseFloat(l.home_premium) || 0;
+                    const tenant = parseFloat(l.tenant_premium) || 0;
+                    const total = parseFloat(l.premium) || (auto + home + tenant);
+                    return sum + total;
+                }
+                return sum;
+            }, 0);
 
             document.querySelector('.stat-new-leads').textContent = newCount;
             document.querySelector('.stat-contacted').textContent = contactedCount;
             document.querySelector('.stat-quotes').textContent = quoteCount;
             document.querySelector('.stat-closed').textContent = closedCount;
-            document.querySelector('.stat-revenue').textContent = `$${totalRevenue}`;
+            document.querySelector('.stat-revenue').textContent = `$${totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         }
 
         /**
@@ -530,7 +541,7 @@
         }
 
         async function handleStatusChange(e) {
-            const leadId = parseInt(e.target.dataset.leadId);
+            const leadId = e.target.dataset.leadId;
             const newStatus = e.target.value;
             await updateLeadStatus(leadId, newStatus);
         }

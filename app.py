@@ -15,6 +15,7 @@ import os
 import sys
 import json
 import uuid
+import re
 from datetime import datetime
 from pathlib import Path
 from werkzeug.utils import secure_filename
@@ -26,11 +27,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    import psycopg2
-    import psycopg2.extras
-    from psycopg2 import OperationalError
-except:
-    Error = Exception  # Fallback if mysql not available
+    import pg8000
+    PG8000_AVAILABLE = True
+except ImportError:
+    PG8000_AVAILABLE = False
+
+try:
+    import psycopg
+    from psycopg import OperationalError, Error as PostgresError
+    PSYCOPG_AVAILABLE = True
+except ImportError as e:
+    PSYCOPG_AVAILABLE = False
+    try:
+        import psycopg2
+        import psycopg2.extras
+        from psycopg2 import OperationalError
+        psycopg = None
+        PSYCOPG2_AVAILABLE = True
+    except ImportError:
+        psycopg = None
+        psycopg2 = None
+        OperationalError = Exception
+        PostgresError = Exception
+        PSYCOPG2_AVAILABLE = False
 
 from meta_leads_fetcher import get_fetcher  # Meta API integration
 from dash_parser import parse_dash_report  # DASH PDF parser
@@ -55,24 +74,115 @@ if sys.platform == 'win32':
 app = Flask(__name__)
 CORS(app)
 
+# In-memory database for temporary storage (when PostgreSQL not available)
+mock_leads_db = {}
+
 # Database connection
 def get_db_connection():
     """Get PostgreSQL database connection with environment variables"""
-    try:
-        db_url = os.getenv('DATABASE_URL')
-        if not db_url:
-            db_url = (
-                f"dbname={os.getenv('PG_DB', 'insurance_details')} "
-                f"user={os.getenv('PG_USER', 'insurance_details_user')} "
-                f"password={os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')} "
-                f"host={os.getenv('PG_HOST', 'dpg-d5daccmr433s73ad8e70-a')} "
-                f"port={os.getenv('PG_PORT', 5432)}"
-            )
-        conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
-        return conn
-    except OperationalError as e:
-        print(f"Database connection error: {e}")
+    global PSYCOPG_AVAILABLE, PSYCOPG2_AVAILABLE
+    
+    if not (PG8000_AVAILABLE or PSYCOPG_AVAILABLE or PSYCOPG2_AVAILABLE):
+        print("[DB] PostgreSQL drivers not available - using in-memory storage")
         return None
+    try:
+        # Parse DATABASE_URL or build from environment variables
+        db_url = os.getenv('DATABASE_URL')
+        
+        # Try pg8000 first (pure Python, no system dependencies)
+        if PG8000_AVAILABLE:
+            try:
+                if db_url:
+                    # Parse postgresql://user:password@host:port/dbname
+                    import re
+                    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
+                    if match:
+                        user, password, host, port, db = match.groups()
+                    else:
+                        # Try alternative format
+                        user = os.getenv('PG_USER', 'insurance_details_user')
+                        password = os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')
+                        host = os.getenv('PG_HOST', 'dpg-d5daccmr433s73ad8e70-a')
+                        port = int(os.getenv('PG_PORT', 5432))
+                        db = os.getenv('PG_DB', 'insurance_details')
+                else:
+                    user = os.getenv('PG_USER', 'insurance_details_user')
+                    password = os.getenv('PG_PASSWORD', 'yJB4ToerfMWn0xu0NV7hUdn56ed0RjcR')
+                    host = os.getenv('PG_HOST', 'dpg-d5daccmr433s73ad8e70-a')
+                    port = int(os.getenv('PG_PORT', 5432))
+                    db = os.getenv('PG_DB', 'insurance_details')
+                
+                conn = pg8000.connect(
+                    user=user,
+                    password=password,
+                    host=host,
+                    port=port,
+                    database=db,
+                    timeout=5
+                )
+                print("[DB] ✓ Connected to PostgreSQL using pg8000 (pure Python driver)")
+                return conn
+            except Exception as e:
+                print(f"[DB] pg8000 connection failed: {e}")
+                # Don't return, try next driver
+        
+        # Try psycopg3 (if libpq available)
+        if PSYCOPG_AVAILABLE and psycopg is not None:
+            try:
+                conn = psycopg.connect(db_url)
+                print("[DB] ✓ Connected to PostgreSQL using psycopg3")
+                return conn
+            except ImportError as e:
+                print(f"[DB] psycopg3 import error: {e}")
+                PSYCOPG_AVAILABLE = False
+        
+        # Fall back to psycopg2
+        if PSYCOPG2_AVAILABLE and psycopg2 is not None:
+            try:
+                conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+                print("[DB] ✓ Connected to PostgreSQL using psycopg2")
+                return conn
+            except Exception as e2:
+                print(f"[DB] psycopg2 connection failed: {e2}")
+        
+        print("[DB] Unable to connect to PostgreSQL with any available driver")
+        return None
+    except Exception as e:
+        print(f"[DB] Database connection error: {e}")
+        return None
+
+# Helper function to execute UPDATE queries with different drivers
+def execute_db_update(conn, query, params):
+    """Execute an UPDATE query using the appropriate driver API"""
+    try:
+        if PG8000_AVAILABLE:
+            # pg8000 API - connection object has cursor() method and execute()
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            cursor.close()
+            return True
+        elif PSYCOPG_AVAILABLE and hasattr(conn, 'cursor'):
+            # psycopg3 API
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+            conn.commit()
+            return True
+        elif PSYCOPG2_AVAILABLE and hasattr(conn, 'cursor'):
+            # psycopg2 API
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            cursor.close()
+            return True
+        return False
+    except Exception as e:
+        print(f"[DB] Error executing query: {e}")
+        try:
+            conn.rollback()
+        except:
+            pass
+        raise
 
 # Store connection in app config (optional - not required to start)
 try:
@@ -81,20 +191,20 @@ try:
         app.config['db_connection'] = db_conn
         print("[DB] Database connection established")
     else:
-        print("[DB] Database not available - running in temporary mode")
+        print("[DB] Database not available - using in-memory storage for updates")
         app.config['db_connection'] = None
 except Exception as e:
-    print(f"[DB] Database optional - running without database")
+    print(f"[DB] Database optional - running with in-memory storage")
     print(f"[DB] Error details: {e}")
     app.config['db_connection'] = None
 
 # Register quote save endpoint (optional)
 try:
-    if app.config['db_connection']:
+    if app.config['db_connection'] and save_quote:
         save_quote(app)
         print("[API] Quote save endpoint registered")
     else:
-        print("[API] Database not connected - quote saving disabled")
+        print("[API] Database not connected or save_quote not available - quote saving disabled")
 except Exception as e:
     print(f"[API] Warning: Could not register quote endpoint - {e}")
 
@@ -517,28 +627,13 @@ def get_leads():
         
         print(f"[API] /api/leads - search: {search}, page: {page}, status: {status}")
         
-        # Fetch leads from MySQL if available, else Meta API, else sample
-        all_leads = []
-        try:
-            conn = get_db_connection()
-            if conn:
-                cursor = conn.cursor(dictionary=True)
-                cursor.execute("SELECT * FROM meta_leads ORDER BY created_at DESC LIMIT 1000")
-                all_leads = cursor.fetchall()
-                cursor.close()
-                conn.close()
-                print(f"[API] Got {len(all_leads)} leads from MySQL")
-        except Exception as db_e:
-            print(f"[API] MySQL fetch failed: {db_e}")
+        # 1. Always fetch latest leads from Meta API first
+        fetcher = get_fetcher()
+        all_leads = fetcher.fetch_leads(limit=1000)
+        
         if not all_leads:
-            fetcher = get_fetcher()
-            meta_leads = fetcher.fetch_leads(limit=1000)
-            if meta_leads:
-                print(f"[API] Got {len(meta_leads)} leads from Meta API")
-                all_leads = meta_leads
-            else:
-                print(f"[API] Meta API returned no leads - using sample data")
-                all_leads = [
+            print(f"[API] Meta API returned no leads - using sample data")
+            all_leads = [
                 {
                     'id': 1,
                     'full_name': 'Anchit Parveen Gupta',
@@ -688,122 +783,57 @@ def get_leads():
                     'premium': '',
                     'potential_status': '',
                     'renewal_date': ''
-                },
-                {
-                    'id': 11,
-                    'full_name': 'Angela Patricia Johnson',
-                    'first_name': 'Angela',
-                    'last_name': 'Johnson',
-                    'email': 'angela.johnson@email.com',
-                    'phone': '(647) 555-1111',
-                    'lead_identity': 'Angela Patricia Johnson',
-                    'contact_info': '(647) 555-1111 | angela.johnson@email.com',
-                    'created_at': '2025-12-27',
-                    'status': 'new',
-                    'premium': '',
-                    'potential_status': '',
-                    'renewal_date': ''
-                },
-                {
-                    'id': 12,
-                    'full_name': 'Christopher Lee',
-                    'first_name': 'Christopher',
-                    'last_name': 'Lee',
-                    'email': 'chris.lee@email.com',
-                    'phone': '(905) 555-1212',
-                    'lead_identity': 'Christopher Lee',
-                    'contact_info': '(905) 555-1212 | chris.lee@email.com',
-                    'created_at': '2025-12-27',
-                    'status': 'quote_sent',
-                    'premium': '',
-                    'potential_status': '',
-                    'renewal_date': ''
-                },
-                {
-                    'id': 13,
-                    'full_name': 'Natasha Petrov',
-                    'first_name': 'Natasha',
-                    'last_name': 'Petrov',
-                    'email': 'natasha.p@email.com',
-                    'phone': '(416) 555-1313',
-                    'lead_identity': 'Natasha Petrov',
-                    'contact_info': '(416) 555-1313 | natasha.p@email.com',
-                    'created_at': '2025-12-27',
-                    'status': 'new'
-                },
-                {
-                    'id': 14,
-                    'full_name': 'Kevin Thomas Murphy',
-                    'first_name': 'Kevin',
-                    'last_name': 'Murphy',
-                    'email': 'kevin.murphy@email.com',
-                    'phone': '(647) 555-1414',
-                    'lead_identity': 'Kevin Thomas Murphy',
-                    'contact_info': '(647) 555-1414 | kevin.murphy@email.com',
-                    'created_at': '2025-12-27',
-                    'status': 'contacted'
-                },
-                {
-                    'id': 15,
-                    'full_name': 'Jennifer Wilson',
-                    'first_name': 'Jennifer',
-                    'last_name': 'Wilson',
-                    'email': 'jen.wilson@email.com',
-                    'phone': '(905) 555-1515',
-                    'lead_identity': 'Jennifer Wilson',
-                    'contact_info': '(905) 555-1515 | jen.wilson@email.com',
-                    'created_at': '2025-12-26',
-                    'status': 'new'
-                },
-                {
-                    'id': 16,
-                    'full_name': 'Daniel Martinez',
-                    'first_name': 'Daniel',
-                    'last_name': 'Martinez',
-                    'email': 'daniel.martinez@email.com',
-                    'phone': '(416) 555-1616',
-                    'lead_identity': 'Daniel Martinez',
-                    'contact_info': '(416) 555-1616 | daniel.martinez@email.com',
-                    'created_at': '2025-12-26',
-                    'status': 'new'
-                },
-                {
-                    'id': 17,
-                    'full_name': 'Rachel Thompson',
-                    'first_name': 'Rachel',
-                    'last_name': 'Thompson',
-                    'email': 'rachel.t@email.com',
-                    'phone': '(647) 555-1717',
-                    'lead_identity': 'Rachel Thompson',
-                    'contact_info': '(647) 555-1717 | rachel.t@email.com',
-                    'created_at': '2025-12-26',
-                    'status': 'quote_sent'
-                },
-                {
-                    'id': 18,
-                    'full_name': 'Brandon Scott Davis',
-                    'first_name': 'Brandon',
-                    'last_name': 'Davis',
-                    'email': 'brandon.davis@email.com',
-                    'phone': '(905) 555-1818',
-                    'lead_identity': 'Brandon Scott Davis',
-                    'contact_info': '(905) 555-1818 | brandon.davis@email.com',
-                    'created_at': '2025-12-26',
-                    'status': 'new'
-                },
-                {
-                    'id': 19,
-                    'full_name': 'Victoria Lewis',
-                    'first_name': 'Victoria',
-                    'last_name': 'Lewis',
-                    'email': 'victoria.lewis@email.com',
-                    'phone': '(416) 555-1919',
-                    'lead_identity': 'Victoria Lewis',
-                    'contact_info': '(416) 555-1919 | victoria.lewis@email.com',
-                    'created_at': '2025-12-25',
-                    'status': 'closed_won'
                 }
             ]
+
+        # 2. Fetch local updates from PostgreSQL and merge
+        try:
+            conn = get_db_connection()
+            if conn:
+                local_data = {}
+                if PG8000_AVAILABLE:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM leads")
+                    columns = [desc[0] for desc in cursor.description]
+                    rows = cursor.fetchall()
+                    for row in rows:
+                        d = dict(zip(columns, row))
+                        local_data[str(d.get('meta_lead_id'))] = d
+                elif PSYCOPG2_AVAILABLE:
+                    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    cursor.execute("SELECT * FROM leads")
+                    rows = cursor.fetchall()
+                    for row in rows:
+                        local_data[str(row.get('meta_lead_id'))] = row
+                cursor.close()
+                conn.close()
+                
+                if local_data:
+                    print(f"[API] Merging {len(local_data)} local updates from PostgreSQL")
+                    for lead in all_leads:
+                        lead_id = str(lead.get('id') or lead.get('meta_lead_id') or '')
+                        if lead_id in local_data:
+                            # Merge selectively
+                            updates = local_data[lead_id]
+                            for key, value in updates.items():
+                                if value is not None and value != '':
+                                    # Don't overwrite name with generic 'Lead'
+                                    if key == 'full_name' and lead.get('full_name') and value == 'Lead':
+                                        continue
+                                    lead[key] = value
+        except Exception as db_e:
+            print(f"[API] PostgreSQL merge failed: {db_e}")
+
+        # 3. Merge with in-memory storage (mock_leads_db) as final fallback
+        for lead in all_leads:
+            lead_id = str(lead.get('id') or lead.get('meta_lead_id') or '')
+            if lead_id and lead_id in mock_leads_db:
+                stored_data = mock_leads_db[lead_id]
+                for key, value in stored_data.items():
+                    if key == 'full_name' and lead.get('full_name') and value == 'Lead':
+                        continue
+                    lead[key] = value
+                print(f"[API] Merged in-memory data for lead {lead_id}")
         
         # Filter by search - search across all name and contact fields
         if search:
@@ -824,7 +854,6 @@ def get_leads():
                 
                 if search_lower in searchable_text:
                     filtered.append(l)
-                    print(f"[API] Match: {l.get('full_name', 'UNKNOWN')}")
             
             all_leads = filtered
             print(f"[API] Search returned {len(all_leads)} results")
@@ -834,10 +863,8 @@ def get_leads():
             all_leads = [l for l in all_leads if l.get('status') == status]
         
         # Sort by created_at descending (newest first)
-        # This ensures latest leads from Facebook appear at the top
         try:
-            all_leads.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-            print(f"[API] Sorted leads by created_at (newest first)")
+            all_leads.sort(key=lambda x: str(x.get('created_at', '')), reverse=True)
         except Exception as e:
             print(f"[API] Warning: Could not sort leads: {e}")
         
@@ -1505,23 +1532,33 @@ def update_lead_signal(lead_id):
         try:
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor()
                 query = """
-                    INSERT INTO meta_leads (meta_lead_id, full_name, signal)
-                    VALUES (%s, 'Unknown', %s)
-                    ON CONFLICT (meta_lead_id) DO UPDATE SET signal = EXCLUDED.signal
+                    INSERT INTO leads (meta_lead_id, full_name, signal)
+                    VALUES (%s, 'Lead', %s)
+                    ON CONFLICT (meta_lead_id) DO UPDATE SET signal = EXCLUDED.signal, updated_at = CURRENT_TIMESTAMP
                 """
-                cursor.execute(query, (lead_id, signal_value))
-                conn.commit()
-                cursor.close()
+                execute_db_update(conn, query, (lead_id, signal_value))
                 print(f"[DB] ✓ Lead {lead_id} signal saved to PostgreSQL", flush=True)
             else:
-                print(f"[DB] PostgreSQL not available - signal not persisted", flush=True)
+                # Fallback to in-memory storage
+                if lead_id not in mock_leads_db:
+                    mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+                mock_leads_db[lead_id]['signal'] = signal_value
+                mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+                print(f"[DB] PostgreSQL not available - signal saved to in-memory storage", flush=True)
         except Exception as db_error:
             print(f"[DB] Error saving signal: {db_error}", flush=True)
+            # Fallback to in-memory storage
+            if lead_id not in mock_leads_db:
+                mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+            mock_leads_db[lead_id]['signal'] = signal_value
+            mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
         finally:
             if conn:
-                conn.close()
+                try:
+                    conn.close()
+                except:
+                    pass
 
         # Send signal to Facebook Conversions API
         import requests, time, hashlib, os
@@ -1535,12 +1572,22 @@ def update_lead_signal(lead_id):
         try:
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                cursor.execute("SELECT email, phone FROM meta_leads WHERE meta_lead_id=%s", (lead_id,))
-                row = cursor.fetchone()
-                if row:
-                    user_email = row.get('email', '') or ''
-                    user_phone = row.get('phone', '') or ''
+                # Use execute_db_query helper if we had one, but for SELECT we need a cursor
+                if PG8000_AVAILABLE:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT email, phone FROM leads WHERE meta_lead_id=%s", (lead_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        # pg8000 returns a list/tuple
+                        user_email = row[0] if len(row) > 0 else ''
+                        user_phone = row[1] if len(row) > 1 else ''
+                elif PSYCOPG2_AVAILABLE:
+                    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                    cursor.execute("SELECT email, phone FROM leads WHERE meta_lead_id=%s", (lead_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        user_email = row.get('email', '') or ''
+                        user_phone = row.get('phone', '') or ''
                 cursor.close()
                 conn.close()
         except Exception as e:
@@ -1581,35 +1628,117 @@ def update_lead_premium(lead_id):
     """Update lead's premium potential"""
     try:
         data = request.get_json()
-        premium = data.get('premium')
+        auto_premium = data.get('auto_premium')
+        home_premium = data.get('home_premium')
+        tenant_premium = data.get('tenant_premium')
+        total_premium = data.get('premium') # Total
         
-        print(f"[DB] Updating lead {lead_id} premium to: {premium}", flush=True)
+        print(f"[DB] Updating lead {lead_id} premiums: Auto={auto_premium}, Home={home_premium}, Tenant={tenant_premium}, Total={total_premium}", flush=True)
         
         conn = None
         try:
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor()
-                query = """
-                    INSERT INTO meta_leads (meta_lead_id, full_name, premium)
-                    VALUES (%s, 'Unknown', %s)
-                    ON DUPLICATE KEY UPDATE premium = VALUES(premium)
-                """
-                cursor.execute(query, (lead_id, premium))
-                conn.commit()
-                cursor.close()
-                print(f"[DB] ✓ Lead {lead_id} premium saved to MySQL", flush=True)
+                try:
+                    # We'll store the total in the 'premium' column for now
+                    # If we want to store individual ones, we'd need to add columns
+                    query = """
+                        INSERT INTO leads (meta_lead_id, premium, full_name)
+                        VALUES (%s, %s, 'Lead')
+                        ON CONFLICT (meta_lead_id) DO UPDATE 
+                        SET premium = EXCLUDED.premium, updated_at = CURRENT_TIMESTAMP
+                    """
+                    execute_db_update(conn, query, (lead_id, total_premium))
+                    print(f"[DB] ✓ Lead {lead_id} total premium saved to PostgreSQL", flush=True)
+                    return jsonify({'success': True, 'message': 'Premium updated'}), 200
+                except Exception as db_error:
+                    print(f"[DB] Error saving to PostgreSQL: {db_error}", flush=True)
+                    raise
             else:
-                print(f"[DB] MySQL not available - premium not persisted", flush=True)
+                # Fallback to in-memory storage - here we CAN store individual values
+                if lead_id not in mock_leads_db:
+                    mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+                
+                mock_leads_db[lead_id]['auto_premium'] = auto_premium
+                mock_leads_db[lead_id]['home_premium'] = home_premium
+                mock_leads_db[lead_id]['tenant_premium'] = tenant_premium
+                mock_leads_db[lead_id]['premium'] = total_premium
+                mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+                
+                print(f"[DB] ✓ Lead {lead_id} premiums saved to in-memory storage", flush=True)
+                return jsonify({'success': True, 'message': 'Premiums updated (stored locally)'}), 200
         except Exception as db_error:
-            print(f"[DB] Error saving premium: {db_error}", flush=True)
+            print(f"[DB] Error updating premium: {db_error}", flush=True)
+            # Fallback to in-memory storage
+            if lead_id not in mock_leads_db:
+                mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+            mock_leads_db[lead_id]['auto_premium'] = auto_premium
+            mock_leads_db[lead_id]['home_premium'] = home_premium
+            mock_leads_db[lead_id]['tenant_premium'] = tenant_premium
+            mock_leads_db[lead_id]['premium'] = total_premium
+            mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+            return jsonify({'success': True, 'message': 'Premiums updated (stored locally)'}), 200
         finally:
             if conn:
-                conn.close()
-        
-        return jsonify({'success': True, 'message': 'Premium updated'}), 200
+                try:
+                    conn.close()
+                except:
+                    pass
     except Exception as e:
         print(f"[API] Error updating premium: {str(e)}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/leads/<lead_id>', methods=['PUT'])
+def update_lead(lead_id):
+    """Update lead status (generic endpoint)"""
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        print(f"[DB] Updating lead {lead_id} status to: {status}", flush=True)
+        
+        conn = None
+        try:
+            conn = get_db_connection()
+            if conn:
+                try:
+                    query = """
+                        INSERT INTO leads (meta_lead_id, status, full_name)
+                        VALUES (%s, %s, 'Lead')
+                        ON CONFLICT (meta_lead_id) DO UPDATE 
+                        SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
+                    """
+                    execute_db_update(conn, query, (lead_id, status))
+                    print(f"[DB] ✓ Lead {lead_id} status saved to PostgreSQL", flush=True)
+                    return jsonify({'success': True, 'message': 'Status updated', 'status': status}), 200
+                except Exception as db_error:
+                    print(f"[DB] Error saving to PostgreSQL: {db_error}", flush=True)
+                    raise
+            else:
+                # Fallback to in-memory storage
+                if lead_id not in mock_leads_db:
+                    mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+                mock_leads_db[lead_id]['status'] = status
+                mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+                print(f"[DB] ✓ Lead {lead_id} status saved to in-memory storage", flush=True)
+                return jsonify({'success': True, 'message': 'Status updated (stored locally)', 'status': status}), 200
+        except Exception as db_error:
+            print(f"[DB] Error updating status: {db_error}", flush=True)
+            # Still save to in-memory as backup
+            if lead_id not in mock_leads_db:
+                mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+            mock_leads_db[lead_id]['status'] = status
+            mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+            return jsonify({'success': True, 'message': 'Status updated (stored locally)', 'status': status}), 200
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+    except Exception as e:
+        print(f"[API] Error updating status: {str(e)}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1626,25 +1755,41 @@ def update_lead_potential_status(lead_id):
         try:
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor()
-                query = """
-                    INSERT INTO meta_leads (meta_lead_id, full_name, potential_status)
-                    VALUES (%s, 'Unknown', %s)
-                    ON DUPLICATE KEY UPDATE potential_status = VALUES(potential_status)
-                """
-                cursor.execute(query, (lead_id, potential_status))
-                conn.commit()
-                cursor.close()
-                print(f"[DB] ✓ Lead {lead_id} potential status saved to MySQL", flush=True)
+                try:
+                    query = """
+                        INSERT INTO leads (meta_lead_id, potential_status, full_name)
+                        VALUES (%s, %s, 'Lead')
+                        ON CONFLICT (meta_lead_id) DO UPDATE 
+                        SET potential_status = EXCLUDED.potential_status, updated_at = CURRENT_TIMESTAMP
+                    """
+                    execute_db_update(conn, query, (lead_id, potential_status))
+                    print(f"[DB] ✓ Lead {lead_id} potential status saved to PostgreSQL", flush=True)
+                    return jsonify({'success': True, 'message': 'Potential status updated'}), 200
+                except Exception as db_error:
+                    print(f"[DB] Error saving to PostgreSQL: {db_error}", flush=True)
+                    raise
             else:
-                print(f"[DB] MySQL not available - potential status not persisted", flush=True)
+                # Fallback to in-memory storage
+                if lead_id not in mock_leads_db:
+                    mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+                mock_leads_db[lead_id]['potential_status'] = potential_status
+                mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+                print(f"[DB] ✓ Lead {lead_id} potential status saved to in-memory storage", flush=True)
+                return jsonify({'success': True, 'message': 'Potential status updated (stored locally)'}), 200
         except Exception as db_error:
-            print(f"[DB] Error saving potential status: {db_error}", flush=True)
+            print(f"[DB] Error updating potential status: {db_error}", flush=True)
+            # Fallback to in-memory storage
+            if lead_id not in mock_leads_db:
+                mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+            mock_leads_db[lead_id]['potential_status'] = potential_status
+            mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+            return jsonify({'success': True, 'message': 'Potential status updated (stored locally)'}), 200
         finally:
             if conn:
-                conn.close()
-        
-        return jsonify({'success': True, 'message': 'Potential status updated'}), 200
+                try:
+                    conn.close()
+                except:
+                    pass
     except Exception as e:
         print(f"[API] Error updating potential status: {str(e)}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1663,25 +1808,41 @@ def update_lead_renewal_date(lead_id):
         try:
             conn = get_db_connection()
             if conn:
-                cursor = conn.cursor()
-                query = """
-                    INSERT INTO meta_leads (meta_lead_id, full_name, renewal_date)
-                    VALUES (%s, 'Unknown', %s)
-                    ON DUPLICATE KEY UPDATE renewal_date = VALUES(renewal_date)
-                """
-                cursor.execute(query, (lead_id, renewal_date))
-                conn.commit()
-                cursor.close()
-                print(f"[DB] ✓ Lead {lead_id} renewal date saved to MySQL", flush=True)
+                try:
+                    query = """
+                        INSERT INTO leads (meta_lead_id, renewal_date, full_name)
+                        VALUES (%s, %s, 'Lead')
+                        ON CONFLICT (meta_lead_id) DO UPDATE 
+                        SET renewal_date = EXCLUDED.renewal_date, updated_at = CURRENT_TIMESTAMP
+                    """
+                    execute_db_update(conn, query, (lead_id, renewal_date))
+                    print(f"[DB] ✓ Lead {lead_id} renewal date saved to PostgreSQL", flush=True)
+                    return jsonify({'success': True, 'message': 'Renewal date updated'}), 200
+                except Exception as db_error:
+                    print(f"[DB] Error saving to PostgreSQL: {db_error}", flush=True)
+                    raise
             else:
-                print(f"[DB] MySQL not available - renewal date not persisted", flush=True)
+                # Fallback to in-memory storage
+                if lead_id not in mock_leads_db:
+                    mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+                mock_leads_db[lead_id]['renewal_date'] = renewal_date
+                mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+                print(f"[DB] ✓ Lead {lead_id} renewal date saved to in-memory storage", flush=True)
+                return jsonify({'success': True, 'message': 'Renewal date updated (stored locally)'}), 200
         except Exception as db_error:
-            print(f"[DB] Error saving renewal date: {db_error}", flush=True)
+            print(f"[DB] Error updating renewal date: {db_error}", flush=True)
+            # Fallback to in-memory storage
+            if lead_id not in mock_leads_db:
+                mock_leads_db[lead_id] = {'meta_lead_id': lead_id, 'full_name': 'Lead'}
+            mock_leads_db[lead_id]['renewal_date'] = renewal_date
+            mock_leads_db[lead_id]['updated_at'] = datetime.now().isoformat()
+            return jsonify({'success': True, 'message': 'Renewal date updated (stored locally)'}), 200
         finally:
             if conn:
-                conn.close()
-        
-        return jsonify({'success': True, 'message': 'Renewal date updated'}), 200
+                try:
+                    conn.close()
+                except:
+                    pass
     except Exception as e:
         print(f"[API] Error updating renewal date: {str(e)}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1761,7 +1922,8 @@ if __name__ == '__main__':
     import warnings
     warnings.filterwarnings('ignore')
     
-    port = int(os.getenv('FLASK_PORT', 3000))
+    # Render uses PORT environment variable
+    port = int(os.getenv('PORT', os.getenv('FLASK_PORT', 3001)))
     debug = os.getenv('FLASK_DEBUG', 'False') == 'True'
     
     print(f"[START] Flask server starting on port {port}", flush=True)

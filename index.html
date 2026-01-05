@@ -295,6 +295,8 @@
             leads: `${API_BASE_URL}/api/leads`,
             leadStatus: (id) => `${API_BASE_URL}/api/leads/${id}`,
             leadSignal: (id) => `${API_BASE_URL}/api/leads/${id}/signal`,
+            leadRenewalDate: (id) => `${API_BASE_URL}/api/leads/${id}/renewal-date`,
+            leadPremium: (id) => `${API_BASE_URL}/api/leads/${id}/premium`,
             processLead: (id) => `${API_BASE_URL}/api/process/${id}`,
             sendToEventManager: (id) => `${API_BASE_URL}/api/leads/${id}/signal`,
         };
@@ -332,7 +334,7 @@
                 return data;
             } catch (error) {
                 console.error('Error fetching leads:', error);
-                showError('Failed to fetch leads. Make sure backend is running on http://localhost:3001');
+                showError('Failed to fetch leads. Please check your connection or backend status.');
             }
         }
 
@@ -493,7 +495,7 @@
 
                 // Signal - Load from database
                 const dbSignal = lead.signal || 'red';
-                setSignal(row.querySelector('.signal-toggle-green'), dbSignal);
+                updateSignalUI(row, dbSignal);
 
                 tbody.appendChild(clone);
             });
@@ -511,13 +513,24 @@
             const contactedCount = leads.filter(l => l.status === 'contacted').length;
             const quoteCount = leads.filter(l => l.status === 'quote_sent').length;
             const closedCount = leads.filter(l => l.status === 'closed_won').length;
-            const totalRevenue = leads.reduce((sum, l) => sum + (l.auto_premium || 0) + (l.home_premium || 0) + (l.tenant_premium || 0), 0);
+            
+            // Calculate total revenue from Closed Won leads
+            const totalRevenue = leads.reduce((sum, l) => {
+                if (l.status === 'closed_won') {
+                    const auto = parseFloat(l.auto_premium) || 0;
+                    const home = parseFloat(l.home_premium) || 0;
+                    const tenant = parseFloat(l.tenant_premium) || 0;
+                    const total = parseFloat(l.premium) || (auto + home + tenant);
+                    return sum + total;
+                }
+                return sum;
+            }, 0);
 
             document.querySelector('.stat-new-leads').textContent = newCount;
             document.querySelector('.stat-contacted').textContent = contactedCount;
             document.querySelector('.stat-quotes').textContent = quoteCount;
             document.querySelector('.stat-closed').textContent = closedCount;
-            document.querySelector('.stat-revenue').textContent = `$${totalRevenue}`;
+            document.querySelector('.stat-revenue').textContent = `$${totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         }
 
         /**
@@ -540,18 +553,42 @@
             document.querySelectorAll('.calc-auto, .calc-home, .calc-tenant').forEach(input => {
                 input.removeEventListener('input', handlePremiumInput);
                 input.addEventListener('input', handlePremiumInput);
+                input.removeEventListener('blur', handlePremiumBlur);
+                input.addEventListener('blur', handlePremiumBlur);
+            });
+
+            // Renewal date listener
+            document.querySelectorAll('.renewal-date').forEach(input => {
+                input.removeEventListener('change', handleRenewalDateChange);
+                input.addEventListener('change', handleRenewalDateChange);
             });
         }
 
         async function handleStatusChange(e) {
-            const leadId = parseInt(e.target.dataset.leadId);
+            const leadId = e.target.dataset.leadId;
             const newStatus = e.target.value;
             await updateLeadStatus(leadId, newStatus);
         }
 
+        async function handleRenewalDateChange(e) {
+            const row = e.target.closest('tr');
+            const leadId = row.dataset.id;
+            const renewalDate = e.target.value;
+            await updateLeadRenewalDate(leadId, renewalDate);
+        }
+
+        async function handlePremiumBlur(e) {
+            const row = e.target.closest('tr');
+            const leadId = row.dataset.id;
+            const auto = row.querySelector('.calc-auto').value;
+            const home = row.querySelector('.calc-home').value;
+            const tenant = row.querySelector('.calc-tenant').value;
+            await updateLeadPremium(leadId, auto, home, tenant);
+        }
+
         async function handleProcessClick(e) {
             e.preventDefault();
-            const leadId = parseInt(e.currentTarget.dataset.leadId);
+            const leadId = e.currentTarget.dataset.leadId; // Use string ID
             const row = e.currentTarget.closest('tr');
             const leadName = row.querySelector('.lead-name').textContent;
             const leadPhone = row.querySelector('.lead-phone').textContent;
@@ -615,9 +652,10 @@
         };
 
         // --- META SIGNAL LOGIC ---
-        window.setSignal = function(btn, type) {
-            const row = btn.closest('tr');
-            const leadId = parseInt(row.dataset.id);
+        /**
+         * Update only the UI for the signal toggle
+         */
+        window.updateSignalUI = function(row, type) {
             const greenBtn = row.querySelector('.signal-toggle-green');
             const redBtn = row.querySelector('.signal-toggle-red');
             const syncBtn = row.querySelector('.sync-btn');
@@ -630,10 +668,6 @@
                 syncBtn.disabled = false;
                 syncBtn.className = "sync-btn w-full h-7 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-bold shadow-sm transition-all flex items-center justify-center gap-1";
                 syncBtn.innerHTML = '<i class="fa-brands fa-meta"></i> Sync';
-                
-                // Save to database
-                updateSignalInDatabase(leadId, 'green');
-                
             } else {
                 greenBtn.className = "signal-toggle-green w-9 py-1 rounded-md text-[9px] font-bold transition-all text-slate-300 hover:text-emerald-600";
                 redBtn.className = "signal-toggle-red w-9 py-1 rounded-md text-[9px] font-bold transition-all bg-rose-100 text-rose-700 shadow-inner";
@@ -642,10 +676,18 @@
                 syncBtn.disabled = true;
                 syncBtn.className = "sync-btn w-full h-7 bg-slate-100 text-slate-400 border border-slate-200 rounded text-[9px] font-bold flex items-center justify-center gap-1 cursor-not-allowed";
                 syncBtn.innerHTML = 'No Sync';
-                
-                // Save to database
-                updateSignalInDatabase(leadId, 'red');
             }
+        };
+
+        window.setSignal = function(btn, type) {
+            const row = btn.closest('tr');
+            const leadId = row.dataset.id; // Use string ID
+            
+            // Update UI first
+            updateSignalUI(row, type);
+            
+            // Save to database
+            updateSignalInDatabase(leadId, type);
         };
 
         /**
@@ -673,7 +715,7 @@
             const row = btn.closest('tr');
             const timestampEl = row.querySelector('.sync-timestamp');
             const name = row.querySelector('.lead-name').textContent;
-            const leadId = parseInt(row.dataset.id);
+            const leadId = row.dataset.id; // Use string ID
             const signal = row.dataset.signal;
 
             // Check if signal is green
@@ -783,13 +825,66 @@
                 });
             });
 
-            // Auto-refresh leads every 10 seconds
-            console.log('Starting auto-refresh interval (10 seconds)');
+            // Auto-refresh leads every 60 seconds (increased from 10 to prevent data loss while typing)
+            console.log('Starting auto-refresh interval (60 seconds)');
             setInterval(() => {
-                console.log('Auto-refreshing leads...');
-                fetchLeads(currentPage);
-            }, 10000);
+                // Only refresh if no input is currently focused
+                if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
+                    console.log('Auto-refreshing leads...');
+                    fetchLeads(currentPage);
+                } else {
+                    console.log('Skipping auto-refresh: User is interacting with inputs');
+                }
+            }, 60000);
         });
+
+        /**
+         * Update lead renewal date
+         */
+        async function updateLeadRenewalDate(leadId, renewalDate) {
+            try {
+                const response = await fetch(API_ENDPOINTS.leadRenewalDate(leadId), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ renewal_date: renewalDate }),
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const updated = await response.json();
+                console.log('Renewal date updated:', updated);
+                return updated;
+            } catch (error) {
+                console.error('Error updating renewal date:', error);
+                showError('Failed to update renewal date');
+            }
+        }
+
+        /**
+         * Update lead premium potential
+         */
+        async function updateLeadPremium(leadId, auto, home, tenant) {
+            try {
+                const total = (parseFloat(auto) || 0) + (parseFloat(home) || 0) + (parseFloat(tenant) || 0);
+                const response = await fetch(API_ENDPOINTS.leadPremium(leadId), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        auto_premium: auto,
+                        home_premium: home,
+                        tenant_premium: tenant,
+                        premium: total
+                    }),
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const updated = await response.json();
+                console.log('Premium updated:', updated);
+                return updated;
+            } catch (error) {
+                console.error('Error updating premium:', error);
+                showError('Failed to update premium');
+            }
+        }
     </script>
 </body>
 </html>
