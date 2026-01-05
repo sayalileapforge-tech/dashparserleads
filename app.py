@@ -875,8 +875,25 @@ def get_leads():
             all_leads = [l for l in all_leads if l.get('status') == status]
         
         # Sort by created_at descending (newest first)
+        # Parse dates properly for correct sorting
+        def parse_created_date(lead):
+            created = lead.get('created_at', '')
+            if not created:
+                return ''
+            
+            # Try multiple formats
+            # YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD or timestamp
+            if isinstance(created, str):
+                # Extract just the date part if it's ISO format
+                if 'T' in created:
+                    return created.split('T')[0]  # Get YYYY-MM-DD part
+                return created
+            return str(created)
+        
         try:
-            all_leads.sort(key=lambda x: str(x.get('created_at', '')), reverse=True)
+            # Sort by date descending (newest first), then by ID for consistency
+            all_leads.sort(key=lambda x: (parse_created_date(x), str(x.get('id', ''))), reverse=True)
+            print(f"[API] Sorted {len(all_leads)} leads by created_at (newest first)")
         except Exception as e:
             print(f"[API] Warning: Could not sort leads: {e}")
         

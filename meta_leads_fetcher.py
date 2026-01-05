@@ -21,12 +21,12 @@ class MetaLeadsFetcher:
         self.form_id = os.getenv('META_LEAD_FORM_ID', '')
         self.graph_api_url = 'https://graph.facebook.com/v18.0'
     
-    def fetch_leads(self, limit=100):
+    def fetch_leads(self, limit=1000):
         """
-        Fetch leads from Facebook Lead Form
+        Fetch leads from Facebook Lead Form with pagination support
         
         Args:
-            limit (int): Number of leads to fetch (default 100)
+            limit (int): Maximum number of leads to fetch (default 1000)
         
         Returns:
             list: Array of lead objects with fields:
@@ -38,79 +38,108 @@ class MetaLeadsFetcher:
             return []
         
         try:
-            # Fetch leads from Meta Lead Form
-            url = f"{self.graph_api_url}/{self.form_id}/leads"
-            params = {
-                'access_token': self.access_token,
-                'limit': limit,
-                'fields': 'id,created_time,field_data'
-            }
-            
-            print(f"[META API] Fetching leads from form {self.form_id}...")
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            
-            data = response.json()
             leads = []
+            after_cursor = None
+            page_count = 0
+            batch_size = 100  # Meta API supports up to 100 per page
             
-            # Process each lead from Meta
-            for lead_item in data.get('data', []):
-                try:
-                    lead_id = lead_item.get('id', '')
-                    created_time = lead_item.get('created_time', datetime.now().isoformat())
-                    field_data = lead_item.get('field_data', [])
+            print(f"[META API] Fetching leads from form {self.form_id} (max: {limit})...")
+            
+            while len(leads) < limit:
+                # Fetch leads from Meta Lead Form with pagination
+                url = f"{self.graph_api_url}/{self.form_id}/leads"
+                params = {
+                    'access_token': self.access_token,
+                    'limit': min(batch_size, limit - len(leads)),  # Don't fetch more than needed
+                    'fields': 'id,created_time,field_data'
+                }
+                
+                # Add cursor for pagination
+                if after_cursor:
+                    params['after'] = after_cursor
+                
+                print(f"[META API] Fetching page {page_count + 1} (leads so far: {len(leads)})...")
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                
+                data = response.json()
+                page_leads = data.get('data', [])
+                
+                if not page_leads:
+                    print(f"[META API] No more leads to fetch")
+                    break
+                
+                # Process each lead from Meta
+                for lead_item in page_leads:
+                    if len(leads) >= limit:
+                        break
                     
-                    # Parse field data
-                    lead_info = self._parse_field_data(field_data, lead_id)
-                    
-                    # Build full name - try multiple combinations
-                    full_name = lead_info.get('full_name', '').strip()
-                    
-                    if not full_name:
-                        # Try building from first and last name
-                        first = lead_info.get('first_name', '').strip()
-                        last = lead_info.get('last_name', '').strip()
-                        if first or last:
-                            full_name = f"{first} {last}".strip()
-                    
-                    if not full_name:
-                        # Try generic name field
-                        full_name = lead_info.get('name', '').strip()
-                    
-                    # If we still don't have a name, use lead ID
-                    if not full_name:
-                        full_name = f"Lead {lead_id[-6:]}"  # Use last 6 digits of ID
-                    
-                    email = lead_info.get('email', '').strip()
-                    phone = lead_info.get('phone', '').strip()
-                    
-                    # Format lead for dashboard
-                    formatted_lead = {
-                        'id': lead_id,
-                        'full_name': full_name,
-                        'first_name': lead_info.get('first_name', ''),
-                        'last_name': lead_info.get('last_name', ''),
-                        'email': email,
-                        'phone': phone,
-                        'lead_identity': full_name,
-                        'contact_info': f"{phone} | {email}".strip('| '),
-                        'created_at': created_time,  # Keep full timestamp for proper sorting
-                        'status': 'new',  # New leads from Meta
-                        'source': 'meta_leads',
-                        'premium': '',
-                        'potential_status': '',
-                        'renewal_date': ''
-                    }
-                    
-                    leads.append(formatted_lead)
-                    print(f"[META API] Processed lead: {full_name} | {email} | {phone}")
-                    
-                except Exception as e:
-                    print(f"[META API] Error processing lead: {e}")
-                    continue
+                    try:
+                        lead_id = lead_item.get('id', '')
+                        created_time = lead_item.get('created_time', datetime.now().isoformat())
+                        field_data = lead_item.get('field_data', [])
+                        
+                        # Parse field data
+                        lead_info = self._parse_field_data(field_data, lead_id)
+                        
+                        # Build full name - try multiple combinations
+                        full_name = lead_info.get('full_name', '').strip()
+                        
+                        if not full_name:
+                            # Try building from first and last name
+                            first = lead_info.get('first_name', '').strip()
+                            last = lead_info.get('last_name', '').strip()
+                            if first or last:
+                                full_name = f"{first} {last}".strip()
+                        
+                        if not full_name:
+                            # Try generic name field
+                            full_name = lead_info.get('name', '').strip()
+                        
+                        # If we still don't have a name, use lead ID
+                        if not full_name:
+                            full_name = f"Lead {lead_id[-6:]}"  # Use last 6 digits of ID
+                        
+                        email = lead_info.get('email', '').strip()
+                        phone = lead_info.get('phone', '').strip()
+                        
+                        # Format lead for dashboard
+                        formatted_lead = {
+                            'id': lead_id,
+                            'full_name': full_name,
+                            'first_name': lead_info.get('first_name', ''),
+                            'last_name': lead_info.get('last_name', ''),
+                            'email': email,
+                            'phone': phone,
+                            'lead_identity': full_name,
+                            'contact_info': f"{phone} | {email}".strip('| '),
+                            'created_at': created_time,  # Keep full timestamp for proper sorting
+                            'status': 'new',  # New leads from Meta
+                            'source': 'meta_leads',
+                            'premium': '',
+                            'potential_status': '',
+                            'renewal_date': ''
+                        }
+                        
+                        leads.append(formatted_lead)
+                        print(f"[META API] Processed lead: {full_name} | {email} | {phone}")
+                        
+                    except Exception as e:
+                        print(f"[META API] Error processing lead: {e}")
+                        continue
+                
+                page_count += 1
+                
+                # Check for next page cursor
+                paging = data.get('paging', {})
+                after_cursor = paging.get('cursors', {}).get('after')
+                
+                if not after_cursor:
+                    print(f"[META API] No more pages available")
+                    break
             
             # Return the real leads from Meta (now with actual contact data!)
-            print(f"[META API] Successfully fetched {len(leads)} real leads from Meta")
+            print(f"[META API] Successfully fetched {len(leads)} real leads from Meta (in {page_count} pages)")
             
             return leads
             
