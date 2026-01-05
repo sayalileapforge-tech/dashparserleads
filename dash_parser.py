@@ -117,7 +117,10 @@ def extract_dash_data(text):
     
     # Extract Years of Continuous Insurance
     data['years_continuous_insurance'] = find_value([
-        r'Years of Continuous Insurance:\s+(\d+)'
+        r'Years of Continuous Insurance:\s+(\d+)',
+        r'Continuous Insurance:\s+(\d+)',
+        r'Years Insured:\s+(\d+)',
+        r'Insured for\s+(\d+)\s+years'
     ])
     
     # Extract Years Claims Free
@@ -145,7 +148,7 @@ def extract_dash_data(text):
     # Extract current policy info - from "Policy #1" line at top
     # Format: "#1 2022-1 1-21 to 2025-1 1-21 Certas Home..." or "#1 2025-08-08 to 2026-08-08 Definity..."
     policy_match = re.search(
-        r'#1\s+(\d{4}[-/]\d{1,2}\s*[-/]?\d{1,2}[-/]?\d{2,4})\s+to\s+(\d{4}[-/]\d{1,2}\s*[-/]?\d{1,2}[-/]?\d{2,4})\s+(.+?)\s+(?:Active|Cancelled)',
+        r'#1\s+(\d{4}[-/]\d{1,2}(?:\s*[-/]?\d{1,2}){1,2})\s+to\s+(\d{4}[-/]\d{1,2}(?:\s*[-/]?\d{1,2}){1,2})\s+(.+?)\s+(?:Active|Cancelled)',
         text,
         re.MULTILINE | re.IGNORECASE
     )
@@ -189,37 +192,86 @@ def extract_dash_data(text):
         data['current_operators_count'] = 'Not available in document'
     
     # Extract first insurance date (for G/G1/G2 calculation)
-    # Should be the END OF LATEST TERM from the LAST (most recent) policy for the main driver (Relationship: Self)
+    # Should be: LAST POLICY -> Start of Earliest Term date
     
-    first_insurance_date = None
+    # Extract driver name from beginning of report
+    driver_name_match = re.search(r'DRIVER REPORT\s+([A-Z\s,]+?)\s+(?:DLN|Licence)', text, re.MULTILINE | re.IGNORECASE)
+    driver_name = driver_name_match.group(1).strip() if driver_name_match else None
+    
+    print(f"[DASH PARSER] Driver name from report: '{driver_name}'")
     
     # Find all policy sections
-    policy_pattern = r'Policy\s*#\d+.*?(?=Policy\s*#\d+|$)'
+    policy_pattern = r'(?:Policy\s*(?:#|Number|No\.?)?\s*\d+).*?(?=(?:Policy\s*(?:#|Number|No\.?)?\s*\d+)|$)'
     policies = list(re.finditer(policy_pattern, text, re.DOTALL | re.IGNORECASE))
     
-    last_policy_end_term = None
+    print(f"[DASH PARSER] Found {len(policies)} total policies")
     
-    # Process policies in order - the last one found is the final policy
-    for policy_match in policies:
-        policy_text = policy_match.group(0)
+    final_start_date = None
+    
+    # Get the LAST policy (most important for first insurance date)
+    if policies:
+        last_policy_text = policies[-1].group(0)
+        last_policy_num = len(policies)
+        print(f"[DASH PARSER] Processing LAST policy (Policy #{last_policy_num})")
         
-        # Check if this policy has main driver (Relationship to Policyholder: Self)
-        if re.search(r'Relationship to Policyholder:\s*Self', policy_text, re.IGNORECASE):
-            # Extract End of Latest Term for this policy
-            # Handle both date formats: YYYY-MM DD-DD (with space) or YYYY-MM-DD (with dash)
-            end_term_match = re.search(
-                r'End of (?:the )?Latest Term:\s+(\d{4}[-/]\d{1,2}\s*[-/]?\d{1,2}[-/]?\d{2,4})',
-                policy_text
-            )
+        # Extract operator name from last policy
+        operator_match = re.search(r'Operator:\s+([^\n]+)', last_policy_text, re.IGNORECASE)
+        if operator_match:
+            operator_name = operator_match.group(1).strip()
+            print(f"[DASH PARSER] Last policy Operator: '{operator_name}'")
             
-            if end_term_match:
-                end_term_date = end_term_match.group(1).replace(' ', '')
-                # Always take the latest one found (overwrite each time)
-                last_policy_end_term = end_term_date
+            # Check if it matches driver name
+            if driver_name and operator_name.upper().strip() == driver_name.upper().strip():
+                print(f"[DASH PARSER] ✓ Last policy operator matches driver name!")
+            else:
+                print(f"[DASH PARSER] ✗ Last policy operator does NOT match driver name")
+        
+        # Extract Start of Earliest Term from last policy
+        start_earliest_match = re.search(
+            r'Start of (?:the )?Earliest Term:\s+(\d{4}[-/]\d{1,2}(?:\s*[-/]?\d{1,2})?)',
+            last_policy_text,
+            re.IGNORECASE
+        )
+        
+        if start_earliest_match:
+            final_start_date = start_earliest_match.group(1).replace(' ', '')
+            print(f"[DASH PARSER] ✓ Found Start of Earliest Term in last policy: {final_start_date}")
+        else:
+            print(f"[DASH PARSER] ✗ No Start of Earliest Term found in last policy")
     
-    if last_policy_end_term:
-        data['firstInsuranceDate'] = last_policy_end_term
+    # Fallback 1: if no date in last policy, search entire document
+    if not final_start_date:
+        print(f"[DASH PARSER] Fallback 1: Searching entire document for Start of Earliest Term")
+        fallback_match = re.search(
+            r'Start of (?:the )?Earliest Term:\s+(\d{4}[-/]\d{1,2}(?:\s*[-/]?\d{1,2})?)',
+            text,
+            re.IGNORECASE
+        )
+        if fallback_match:
+            final_start_date = fallback_match.group(1).replace(' ', '')
+            print(f"[DASH PARSER] ✓ Fallback 1 found: {final_start_date}")
+        else:
+            print(f"[DASH PARSER] ✗ Fallback 1 failed")
+    
+    # Fallback 2: extract any date
+    if not final_start_date:
+        print(f"[DASH PARSER] Fallback 2: Extracting any date from document")
+        date_match = re.search(r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})', text)
+        if date_match:
+            final_start_date = date_match.group(1).replace(' ', '')
+            print(f"[DASH PARSER] ✓ Fallback 2 found: {final_start_date}")
+        else:
+            print(f"[DASH PARSER] ✗ Fallback 2 failed")
+
+    if final_start_date:
+        data['startOfEarliestTerm'] = final_start_date
+        print(f"[DASH PARSER] ✓✓✓ SUCCESS - Set startOfEarliestTerm to: {final_start_date}")
     else:
-        data['firstInsuranceDate'] = 'Not available in document'
+        data['startOfEarliestTerm'] = 'Not available in document'
+        print(f"[DASH PARSER] ✗✗✗ FAILED - Could not find any Start of Earliest Term date")
+    
+    # For firstInsuranceDate, use the same value as startOfEarliestTerm
+    data['firstInsuranceDate'] = data['startOfEarliestTerm']
+    print(f"[DASH PARSER] Final: startOfEarliestTerm={data['startOfEarliestTerm']}")
     
     return data

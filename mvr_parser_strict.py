@@ -198,6 +198,8 @@ class StrictMVRParserV1:
         data['issue_date'] = find_value([
             r"Issue Date:\s+(\d{2}/\d{2}/\d{4})",
             r"ISSUE\s+DATE[:\s]+(\d{2}/\d{2}/\d{4})",
+            r"Issue Date:\s+(\d{4}-\d{1,2}-\d{1,2})",
+            r"ISSUE\s+DATE[:\s]+(\d{4}-\d{1,2}-\d{1,2})",
         ])
         
         # Extract demerit points

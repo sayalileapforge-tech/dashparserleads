@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Insurance Dashboard - Fast Entry</title>
     
     <!-- Link to Google Fonts for Inter -->
@@ -843,8 +846,8 @@
                         
                         <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                             
-                            <!-- LEFT COLUMN: 1 MAX -->
-                            <div>
+                            <!-- LEFT COLUMN: 1 MAX (HIDDEN) -->
+                            <div class="hidden">
                                 <div class="mb-4 flex items-center gap-3">
                                     <div class="h-px bg-slate-100 flex-1"></div>
                                     <span class="text-[10px] font-bold text-slate-400 uppercase bg-slate-50/50 px-3 py-1 rounded-full border border-slate-200">1 Max</span>
@@ -867,7 +870,7 @@
                             </div>
 
                             <!-- RIGHT COLUMN: MANUAL CALCULATION -->
-                            <div>
+                            <div class="xl:col-span-2">
                                 <div class="flex items-center justify-between bg-indigo-50 px-4 py-2.5 rounded-t-xl border-b border-indigo-100">
                                     <span class="text-[11px] font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
                                         <i class="fa-solid fa-calculator text-indigo-400"></i> Manual
@@ -891,12 +894,12 @@
                                     <!-- Manual G Row -->
                                     <label class="text-[11px] font-semibold text-slate-500 text-right">G Date</label>
                                     <div class="flex items-center bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden h-9 w-20">
-                                        <button type="button" onclick="adjustOffset('manual-g-offset', -0.1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-100 transition-colors bg-slate-50/50">
+                                        <button type="button" onclick="adjustOffset('manual-g-offset', -1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-100 transition-colors bg-slate-50/50">
                                             <i class="fa-solid fa-minus text-[9px]"></i>
                                         </button>
-                                        <input type="number" id="manual-g-offset" step="0.1" placeholder="0.0" oninput="calculateManualDates()" 
+                                        <input type="number" id="manual-g-offset" step="1" placeholder="0" oninput="calculateManualDates()" 
                                             class="w-full h-full text-center text-slate-700 font-bold text-xs outline-none border-none bg-transparent appearance-none p-0">
-                                        <button type="button" onclick="adjustOffset('manual-g-offset', 0.1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-100 transition-colors bg-slate-50/50">
+                                        <button type="button" onclick="adjustOffset('manual-g-offset', 1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-100 transition-colors bg-slate-50/50">
                                             <i class="fa-solid fa-plus text-[9px]"></i>
                                         </button>
                                     </div>
@@ -906,12 +909,12 @@
                                     <!-- Manual G2 Row -->
                                     <label class="text-[11px] font-semibold text-slate-500 text-right">G2 Date</label>
                                     <div class="flex items-center bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden h-9 w-20">
-                                        <button type="button" onclick="adjustOffset('manual-g2-offset', -0.1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-100 transition-colors bg-slate-50/50">
+                                        <button type="button" onclick="adjustOffset('manual-g2-offset', -1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-100 transition-colors bg-slate-50/50">
                                             <i class="fa-solid fa-minus text-[9px]"></i>
                                         </button>
-                                        <input type="number" id="manual-g2-offset" step="0.1" placeholder="0.0" oninput="calculateManualDates()" 
+                                        <input type="number" id="manual-g2-offset" step="1" placeholder="0" oninput="calculateManualDates()" 
                                             class="w-full h-full text-center text-slate-700 font-bold text-xs outline-none border-none bg-transparent appearance-none p-0">
-                                        <button type="button" onclick="adjustOffset('manual-g2-offset', 0.1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-100 transition-colors bg-slate-50/50">
+                                        <button type="button" onclick="adjustOffset('manual-g2-offset', 1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-100 transition-colors bg-slate-50/50">
                                             <i class="fa-solid fa-plus text-[9px]"></i>
                                         </button>
                                     </div>
@@ -921,12 +924,12 @@
                                     <!-- Manual G1 Row -->
                                     <label class="text-[11px] font-semibold text-slate-500 text-right">G1 Date</label>
                                     <div class="flex items-center bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden h-9 w-20">
-                                        <button type="button" onclick="adjustOffset('manual-g1-offset', -0.1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-100 transition-colors bg-slate-50/50">
+                                        <button type="button" onclick="adjustOffset('manual-g1-offset', -1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-100 transition-colors bg-slate-50/50">
                                             <i class="fa-solid fa-minus text-[9px]"></i>
                                         </button>
-                                        <input type="number" id="manual-g1-offset" step="0.1" placeholder="0.0" oninput="calculateManualDates()" 
+                                        <input type="number" id="manual-g1-offset" step="1" placeholder="0" oninput="calculateManualDates()" 
                                             class="w-full h-full text-center text-slate-700 font-bold text-xs outline-none border-none bg-transparent appearance-none p-0">
-                                        <button type="button" onclick="adjustOffset('manual-g1-offset', 0.1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-100 transition-colors bg-slate-50/50">
+                                        <button type="button" onclick="adjustOffset('manual-g1-offset', 1)" class="w-6 h-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-100 transition-colors bg-slate-50/50">
                                             <i class="fa-solid fa-plus text-[9px]"></i>
                                         </button>
                                     </div>
@@ -1401,17 +1404,19 @@
 
         function adjustOffset(inputId, delta) {
             const input = document.getElementById(inputId);
-            let val = parseFloat(input.value) || 0;
+            let val = parseInt(input.value) || 0;  // Use parseInt for whole years
             val += delta;
-            val = Math.round(val * 10) / 10;
-            if (val < 0) val = 0;
-            input.value = val.toFixed(1);
+            if (val < 0) val = 0;  // Prevent negative years
+            input.value = val.toString();  // Store as whole number
             calculateManualDates();
         }
 
         function calculateManualDates() {
             const firstInsStr = document.getElementById('manual-first-ins').value;
             const issueDateStr = document.getElementById('manual-issue-date').value;
+            
+            console.log('[CALC] First Insurance Date:', firstInsStr);
+            console.log('[CALC] Issue Date:', issueDateStr);
             
             // Display total months gap
             const d1 = parseDateStr(firstInsStr);
@@ -1424,50 +1429,77 @@
                 document.getElementById('manual-gap-display').textContent = `Gap: ${Math.abs(months)} months`;
             } else {
                 document.getElementById('manual-gap-display').textContent = `Gap: --`;
-                return; // Can't calculate without both dates
             }
             
-            // Call backend API to calculate G/G1/G2 using backward calculation logic
-            const payload = {
-                mode: 'manual',
-                issue_date: issueDateStr,
-                first_insurance_date: firstInsStr,
-                driver_name: document.getElementById('driver-name')?.value || null
-            };
+            // ===== NEW LOGIC: Calculate G, G1, G2 by subtracting years =====
+            // G Date = First Insurance Date - G offset (in years)
+            // G2 Date = First Insurance Date - G2 offset (in years)
+            // G1 Date = First Insurance Date - G1 offset (in years)
             
-            fetch('/api/calculate-g-dates', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(r => r.json())
-            .then(data => {
-                console.log('[MANUAL CALC]', data);
+            if (firstInsStr && d1) {
+                console.log('[CALC] Calculating G/G2/G1 dates based on first insurance date');
                 
-                if (data.success && data.calculation_performed) {
-                    // Display calculated dates in mm/dd/yyyy format
-                    document.getElementById('copy-manual-g-date').value = formatISOToDisplay(data.g_date);
-                    document.getElementById('copy-manual-g2-date').value = formatISOToDisplay(data.g2_date);
-                    document.getElementById('copy-manual-g1-date').value = formatISOToDisplay(data.g1_date);
-                    
-                    // Show strategy and total months
-                    console.log(`[MANUAL CALC] Strategy: ${data.strategy}, Total: ${data.total_months} months`);
-                } else if (data.error) {
-                    // Show error
-                    document.getElementById('copy-manual-g-date').value = '';
-                    document.getElementById('copy-manual-g2-date').value = '';
-                    document.getElementById('copy-manual-g1-date').value = '';
-                    console.error('[MANUAL CALC ERROR]', data.error);
-                }
-            })
-            .catch(err => console.error('[MANUAL CALC FETCH ERROR]', err));
+                // Get the offset values from the input fields
+                const gOffset = parseFloat(document.getElementById('manual-g-offset').value) || 0;
+                const g2Offset = parseFloat(document.getElementById('manual-g2-offset').value) || 0;
+                const g1Offset = parseFloat(document.getElementById('manual-g1-offset').value) || 0;
+                
+                console.log('[CALC] Offsets - G:', gOffset, 'G2:', g2Offset, 'G1:', g1Offset);
+                
+                // Create dates by subtracting years
+                const gDate = new Date(d1);
+                gDate.setFullYear(gDate.getFullYear() - gOffset);
+                
+                const g2Date = new Date(d1);
+                g2Date.setFullYear(g2Date.getFullYear() - g2Offset);
+                
+                const g1Date = new Date(d1);
+                g1Date.setFullYear(g1Date.getFullYear() - g1Offset);
+                
+                // Format dates as MM/DD/YYYY
+                const formatDate = (date) => {
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const year = date.getFullYear();
+                    return `${month}/${day}/${year}`;
+                };
+                
+                const gDateStr = formatDate(gDate);
+                const g2DateStr = formatDate(g2Date);
+                const g1DateStr = formatDate(g1Date);
+                
+                console.log('[CALC] Calculated dates - G:', gDateStr, 'G2:', g2DateStr, 'G1:', g1DateStr);
+                
+                // Display the calculated dates
+                document.getElementById('copy-manual-g-date').value = gDateStr;
+                document.getElementById('copy-manual-g2-date').value = g2DateStr;
+                document.getElementById('copy-manual-g1-date').value = g1DateStr;
+                
+                console.log('[CALC] ✓ G/G1/G2 dates updated successfully');
+            } else {
+                console.log('[CALC] Cannot calculate - missing first insurance date');
+                document.getElementById('copy-manual-g-date').value = '';
+                document.getElementById('copy-manual-g2-date').value = '';
+                document.getElementById('copy-manual-g1-date').value = '';
+            }
         }
         
         function formatISOToDisplay(isoDate) {
-            if (!isoDate) return '';
-            const parts = isoDate.split('-');
-            if (parts.length !== 3) return '';
-            return `${parts[1]}/${parts[2]}/${parts[0]}`; // YYYY-MM-DD to MM/DD/YYYY
+            if (!isoDate || isoDate === 'Not available in document') return '';
+            
+            // Handle YYYY-MM-DD or YYYY/MM/DD
+            const parts = isoDate.split(/[-/]/);
+            if (parts.length === 3) {
+                // If first part is 4 digits, it's YYYY-MM-DD
+                if (parts[0].length === 4) {
+                    return `${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}/${parts[0]}`;
+                }
+                // If last part is 4 digits, it's MM/DD/YYYY or DD/MM/YYYY
+                if (parts[2].length === 4) {
+                    return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+                }
+            }
+            return isoDate; // Return as is if we can't parse it
         }
 
         // --- NAVIGATION LOGIC ---
@@ -1639,7 +1671,10 @@
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    console.log(`[DASH] Successfully parsed. Extracted fields:`, result.data);
+                    console.log(`[DASH] Successfully parsed. Full data object:`, result.data);
+                    console.log(`[DASH] All keys in data:`, Object.keys(result.data));
+                    console.log(`[DASH] startOfEarliestTerm value:`, result.data.startOfEarliestTerm);
+                    console.log(`[DASH] firstInsuranceDate value:`, result.data.firstInsuranceDate);
                     
                     const data = result.data;
                     
@@ -1717,6 +1752,43 @@
                     // Continuous insurance years
                     if (data.years_continuous_insurance && data.years_continuous_insurance !== '-') {
                         document.getElementById('copy-cont-ins').value = data.years_continuous_insurance + ' years';
+                    }
+                    
+                    // === POPULATE MANUAL FIRST INSURANCE DATE ===
+                    console.log(`[DASH] startOfEarliestTerm:`, data.startOfEarliestTerm);
+                    console.log(`[DASH] firstInsuranceDate:`, data.firstInsuranceDate);
+                    
+                    // Use whichever is available
+                    const insuranceDate = data.startOfEarliestTerm || data.firstInsuranceDate;
+                    
+                    if (insuranceDate && insuranceDate !== 'Not available in document') {
+                        const manualFirstIns = document.getElementById('manual-first-ins');
+                        console.log(`[DASH] Found manual-first-ins element:`, manualFirstIns !== null);
+                        
+                        if (manualFirstIns) {
+                            // Ensure date is in YYYY-MM-DD format for formatting
+                            let dateToFormat = insuranceDate;
+                            if (insuranceDate.includes('/') && !insuranceDate.match(/^\d{4}/)) {
+                                // Already in MM/DD/YYYY format, use as-is
+                                manualFirstIns.value = insuranceDate;
+                            } else {
+                                // Format YYYY-MM-DD to MM/DD/YYYY
+                                const formattedDate = formatISOToDisplay(insuranceDate);
+                                console.log(`[DASH] Formatted date from ${insuranceDate} to ${formattedDate}`);
+                                manualFirstIns.value = formattedDate;
+                            }
+                            
+                            console.log(`[DASH] Set manual-first-ins.value to: ${manualFirstIns.value}`);
+                            
+                            // Trigger calculation after a small delay to ensure DOM is ready
+                            setTimeout(() => {
+                                calculateManualDates();
+                            }, 100);
+                        } else {
+                            console.log(`[DASH] ERROR: manual-first-ins element not found`);
+                        }
+                    } else {
+                        console.log(`[DASH] No insurance date available`);
                     }
                     
                     // === POPULATE DEMOGRAPHICS ===
@@ -1836,6 +1908,19 @@
                     } else {
                         console.log(`[MVR] Birth date not available`);
                         document.getElementById('mvr-birthdate').textContent = '—';
+                    }
+
+                    // === POPULATE MANUAL ISSUE DATE ===
+                    if (data.issue_date && data.issue_date !== 'Not available in document') {
+                        const manualIssueDate = document.getElementById('manual-issue-date');
+                        if (manualIssueDate) {
+                            if (data.issue_date.includes('/')) {
+                                manualIssueDate.value = data.issue_date;
+                            } else {
+                                manualIssueDate.value = formatISOToDisplay(data.issue_date);
+                            }
+                            calculateManualDates();
+                        }
                     }
                     
                     // Licence Expiry Date

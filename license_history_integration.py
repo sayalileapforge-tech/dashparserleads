@@ -1,5 +1,6 @@
 """License History Integration - G/G1/G2 Date Calculator"""
 
+import re
 from datetime import datetime, timedelta
 
 
@@ -8,6 +9,58 @@ class DriverLicenseHistory:
     
     def __init__(self):
         self.driver_data = {}
+
+    def _parse_date(self, date_str):
+        """Helper to parse dates in various formats"""
+        if not date_str or not isinstance(date_str, str) or 'not available' in date_str.lower():
+            return None
+            
+        # Clean up the string
+        date_str = date_str.strip()
+        
+        # Try common formats
+        formats = [
+            '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', 
+            '%Y/%m/%d', '%d-%m-%Y', '%m-%d-%Y',
+            '%Y%m%d'
+        ]
+        
+        # Handle DASH artifact: YYYY-MMDD (e.g., 2022-1121)
+        if re.match(r'^\d{4}-\d{4}$', date_str):
+            try:
+                year = int(date_str[:4])
+                month = int(date_str[5:7])
+                day = int(date_str[7:9])
+                return datetime(year, month, day)
+            except:
+                pass
+
+        for fmt in formats:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except:
+                continue
+        
+        # Last resort: try to extract digits and guess
+        digits = re.sub(r'\D', '', date_str)
+        if len(digits) == 8:
+            # Try YYYYMMDD
+            try:
+                return datetime.strptime(digits, '%Y%m%d')
+            except:
+                pass
+            # Try MMDDYYYY
+            try:
+                return datetime.strptime(digits, '%m%d%Y')
+            except:
+                pass
+            # Try DDMMYYYY
+            try:
+                return datetime.strptime(digits, '%d%m%Y')
+            except:
+                pass
+                
+        return None
     
     def process_manual_entry(self, issue_date, first_insurance_date, **kwargs):
         """Process manual entry with dates
@@ -22,21 +75,16 @@ class DriverLicenseHistory:
         try:
             # Parse dates if strings
             if isinstance(issue_date, str):
-                # Try multiple formats
-                for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
-                    try:
-                        issue_date = datetime.strptime(issue_date, fmt)
-                        break
-                    except:
-                        continue
+                issue_date = self._parse_date(issue_date)
             
             if isinstance(first_insurance_date, str):
-                for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
-                    try:
-                        first_insurance_date = datetime.strptime(first_insurance_date, fmt)
-                        break
-                    except:
-                        continue
+                first_insurance_date = self._parse_date(first_insurance_date)
+            
+            if not issue_date or not first_insurance_date:
+                return {
+                    'success': False,
+                    'error': 'Invalid date format in manual entry'
+                }
             
             # Calculate G/G1/G2 dates using correct formulas:
             # G = First Insurance Date - 1 year
@@ -66,7 +114,7 @@ class DriverLicenseHistory:
         """Process data from PDF extraction
         
         Args:
-            driver_data: Data from DASH report (contains firstInsuranceDate)
+            driver_data: Data from DASH report (contains firstInsuranceDate or startOfEarliestTerm)
             mvr_data: Data from MVR report (contains issue_date, birth_date, licence_expiry_date)
             
         Returns:
@@ -74,57 +122,44 @@ class DriverLicenseHistory:
         """
         try:
             first_insurance_date_str = driver_data.get('firstInsuranceDate', '')
+            # Fallback to startOfEarliestTerm if firstInsuranceDate is missing
+            if not first_insurance_date_str or first_insurance_date_str == 'Not available in document':
+                first_insurance_date_str = driver_data.get('startOfEarliestTerm', '')
+                
             issue_date_str = mvr_data.get('issue_date', '')
             birth_date_str = mvr_data.get('birth_date', '')
             expiry_date_str = mvr_data.get('licence_expiry_date', '')
             
-            if not first_insurance_date_str or not issue_date_str:
+            if not first_insurance_date_str or not issue_date_str or first_insurance_date_str == 'Not available in document' or issue_date_str == 'Not available in document':
                 return {
                     'success': False,
-                    'error': 'Missing required dates from PDF'
+                    'error': f"Missing required dates from PDF (First Insurance: {first_insurance_date_str}, Issue Date: {issue_date_str})"
                 }
             
-            # Parse dates
-            first_insurance_date = None
-            for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
-                try:
-                    first_insurance_date = datetime.strptime(first_insurance_date_str, fmt)
-                    break
-                except:
-                    continue
-            
-            issue_date = None
-            for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
-                try:
-                    issue_date = datetime.strptime(issue_date_str, fmt)
-                    break
-                except:
-                    continue
+            # Parse dates using robust helper
+            first_insurance_date = self._parse_date(first_insurance_date_str)
+            issue_date = self._parse_date(issue_date_str)
             
             if not first_insurance_date or not issue_date:
+                # Provide more detailed error if possible
+                error_msg = 'Could not parse dates'
+                if not first_insurance_date and not issue_date:
+                    error_msg = f"Could not parse both First Insurance Date ({first_insurance_date_str}) and Issue Date ({issue_date_str})"
+                elif not first_insurance_date:
+                    error_msg = f"Could not parse First Insurance Date: {first_insurance_date_str}"
+                else:
+                    error_msg = f"Could not parse Issue Date: {issue_date_str}"
+                    
                 return {
                     'success': False,
-                    'error': 'Could not parse dates'
+                    'error': error_msg
                 }
             
             # Check experience: If birth_date month/day != expiry_date month/day, customer has < 5 years experience
             if birth_date_str and expiry_date_str:
                 try:
-                    birth_date = None
-                    for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
-                        try:
-                            birth_date = datetime.strptime(birth_date_str, fmt)
-                            break
-                        except:
-                            continue
-                    
-                    expiry_date = None
-                    for fmt in ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']:
-                        try:
-                            expiry_date = datetime.strptime(expiry_date_str, fmt)
-                            break
-                        except:
-                            continue
+                    birth_date = self._parse_date(birth_date_str)
+                    expiry_date = self._parse_date(expiry_date_str)
                     
                     # Check if birth month/day matches expiry month/day
                     if birth_date and expiry_date:
