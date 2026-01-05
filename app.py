@@ -616,6 +616,21 @@ def pdf_parser():
         print(f"[ERROR] Failed to serve PDF Parser: {e}")
         return jsonify({'error': 'PDF Parser not found'}), 404
 
+@app.route('/dashboard/<path:filename>', methods=['GET'])
+def dashboard(filename):
+    """Serve dashboard HTML files from the dashboard folder."""
+    try:
+        filepath = os.path.join('dashboard', secure_filename(filename))
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return Response(content, mimetype='text/html')
+        else:
+            return jsonify({'error': f'File {filename} not found'}), 404
+    except Exception as e:
+        print(f"[ERROR] Failed to serve dashboard: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ===== API ENDPOINTS =====
 
 @app.route('/api/health', methods=['GET'])
@@ -825,9 +840,12 @@ def get_leads():
                     for lead in all_leads:
                         lead_id = str(lead.get('id') or lead.get('meta_lead_id') or '')
                         if lead_id in local_data:
-                            # Merge selectively
+                            # Merge selectively - DON'T overwrite created_at (use Meta's date)
                             updates = local_data[lead_id]
                             for key, value in updates.items():
+                                # Skip merging these fields from database (keep Meta's values)
+                                if key in ['created_at', 'id', 'meta_lead_id']:
+                                    continue
                                 if value is not None and value != '':
                                     # Don't overwrite name with generic 'Lead'
                                     if key == 'full_name' and lead.get('full_name') and value == 'Lead':
@@ -879,21 +897,34 @@ def get_leads():
         def parse_created_date(lead):
             created = lead.get('created_at', '')
             if not created:
-                return ''
+                return '0000-00-00'  # Fallback for empty dates
             
-            # Try multiple formats
-            # YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD or timestamp
-            if isinstance(created, str):
-                # Extract just the date part if it's ISO format
-                if 'T' in created:
-                    return created.split('T')[0]  # Get YYYY-MM-DD part
-                return created
-            return str(created)
+            # Convert to string if needed
+            created_str = str(created)
+            
+            # Handle ISO format with timestamp: 2026-01-02T18:59:52+0000 → 2026-01-02T18:59:52
+            if 'T' in created_str:
+                # Remove timezone info and keep full ISO datetime for proper sorting
+                created_str = created_str.split('+')[0].split('Z')[0]
+                return created_str  # Keep as YYYY-MM-DDTHH:MM:SS for chronological sorting
+            
+            # Handle simple date format: 2025-12-29
+            return created_str
         
         try:
-            # Sort by date descending (newest first), then by ID for consistency
-            all_leads.sort(key=lambda x: (parse_created_date(x), str(x.get('id', ''))), reverse=True)
+            # Sort by date descending (newest first) - ISO format sorts correctly as string
+            all_leads.sort(key=lambda x: parse_created_date(x), reverse=True)
             print(f"[API] Sorted {len(all_leads)} leads by created_at (newest first)")
+            
+            # Log top 5 leads for verification
+            print(f"[API] Top 5 leads after sorting:")
+            for i, lead in enumerate(all_leads[:5]):
+                print(f"[API]   #{i+1}: {lead.get('full_name')} | created_at: {lead.get('created_at')} | parsed: {parse_created_date(lead)}")
+        except Exception as e:
+            print(f"[API] Warning: Could not sort leads: {e}")
+            # Debug: Show first 3 leads after sorting
+            for i, lead in enumerate(all_leads[:3]):
+                print(f"[API] Top {i+1}: {lead.get('full_name')} - {parse_created_date(lead)}")
         except Exception as e:
             print(f"[API] Warning: Could not sort leads: {e}")
         
