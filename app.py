@@ -1976,7 +1976,7 @@ def db_view():
                 columns = [desc[0] for desc in cursor.description]
                 rows = cursor.fetchall()
         
-        html = f\"\"\"
+        html = f"""
         <html><head><title>Live DB View</title>
         <style>
             table{{border-collapse:collapse;width:100%;font-family:sans-serif;font-size:12px;}}
@@ -1989,10 +1989,10 @@ def db_view():
         </style></head><body>
         <div style="padding:20px;">
             <h1>PostgreSQL Live Records</h1>
-            <p>Showing latest updates first. Total records: <b>{{len(rows)}}</b></p>
-            <table><tr>\"\"\"
+            <p>Showing latest updates first. Total records: <b>{len(rows)}</b></p>
+            <table><tr>"""
         
-        for col in columns: html += f"<th>{{col}}</th>"
+        for col in columns: html += f"<th>{col}</th>"
         html += "</tr>"
         
         for row in rows:
@@ -2002,7 +2002,7 @@ def db_view():
                 if columns[i] == 'status':
                     if val == 'new': cell_class = 'class="status-new"'
                     if val == 'closed_won': cell_class = 'class="status-won"'
-                html += f"<td {{cell_class}}>{{val if val is not None else ''}}</td>"
+                html += f"<td {cell_class}>{val if val is not None else ''}</td>"
             html += "</tr>"
             
         html += "</table></div></body></html>"
@@ -2010,7 +2010,7 @@ def db_view():
         conn.close()
         return html
     except Exception as e:
-        return f"<h1>Error Fetching Data</h1><p>{{str(e)}}</p>", 500
+        return f"<h1>Error Fetching Data</h1><p>{str(e)}</p>", 500
 
 
 # Error handlers
