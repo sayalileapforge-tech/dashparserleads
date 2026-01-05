@@ -9,27 +9,13 @@ services:
         value: "3001"
       - key: FLASK_DEBUG
         value: "False"
-      - key: MYSQL_HOST
+      - key: DATABASE_URL
         fromDatabase:
-          name: insurance_leads
-          property: host
-      - key: MYSQL_PORT
-        value: "3306"
-      - key: MYSQL_USER
-        fromDatabase:
-          name: insurance_leads
-          property: user
-      - key: MYSQL_PASSWORD
-        fromDatabase:
-          name: insurance_leads
-          property: password
-      - key: MYSQL_DATABASE
-        fromDatabase:
-          name: insurance_leads
-          property: database
+          name: postgres_db
+          property: connectionString
 
 databases:
-  - name: insurance_leads
-    databaseName: insurance_leads
-    user: root
+  - name: postgres_db
+    databaseName: insurance_details
+    user: insurance_details_user
     plan: starter
